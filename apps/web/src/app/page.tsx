@@ -1,396 +1,206 @@
 "use client";
 
-import Image from "next/image";
 import {
-  Activity,
-  AlertTriangle,
-  Ambulance,
-  ArrowRightLeft,
-  BadgeCheck,
-  Camera,
-  CircleDot,
-  Gauge,
-  Radio,
-  RotateCcw,
-  ShieldAlert,
-  Siren,
-  Users,
+  Activity, AlertTriangle, CloudSun, Construction, Crosshair, Hand,
+  HeartPulse, ListFilter, LocateFixed, LockKeyhole, Minus, MousePointer2, Plus,
+  Radio, RotateCcw, ShieldCheck, Siren, Users, UsersRound, Wind,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import {
+  getDigitalTwinSnapshot, levelFor, scenarioNotes,
+  type RiskLevel, type Scenario, type Zone,
+} from "@/lib/mghsis-demo";
 
-type RiskLevel = "low" | "moderate" | "high" | "critical";
-type Scenario = "normal" | "distress" | "congestion" | "breach" | "gateway" | "redirect";
+type AlertTone = "human" | "crowd" | "integrity";
 
-type Zone = {
-  id: string;
-  label: string;
-  ring: "outer" | "inner" | "premium";
-  start: number;
-  end: number;
-  expected: number;
-  authenticated: number;
-  observed: number;
-  crowdRisk: number;
-  integrityRisk: number;
-  humanAlerts: number;
-  inflow: number;
-  outflow: number;
-};
-
-const baseZones: Zone[] = [
-  { id: "M", label: "Block M", ring: "outer", start: 214, end: 249, expected: 2360, authenticated: 2332, observed: 2390, crowdRisk: 22, integrityRisk: 9, humanAlerts: 0, inflow: 86, outflow: 78 },
-  { id: "N", label: "Block N", ring: "outer", start: 250, end: 285, expected: 3180, authenticated: 3139, observed: 3206, crowdRisk: 31, integrityRisk: 11, humanAlerts: 0, inflow: 112, outflow: 104 },
-  { id: "P", label: "Block P", ring: "outer", start: 286, end: 321, expected: 2810, authenticated: 2798, observed: 2876, crowdRisk: 38, integrityRisk: 13, humanAlerts: 0, inflow: 128, outflow: 91 },
-  { id: "Q", label: "Block Q", ring: "outer", start: 322, end: 357, expected: 2920, authenticated: 2895, observed: 3092, crowdRisk: 47, integrityRisk: 21, humanAlerts: 0, inflow: 145, outflow: 98 },
-  { id: "R", label: "Block R", ring: "outer", start: 358, end: 393, expected: 2640, authenticated: 2614, observed: 2712, crowdRisk: 41, integrityRisk: 16, humanAlerts: 0, inflow: 116, outflow: 103 },
-  { id: "J", label: "Block J", ring: "outer", start: 142, end: 177, expected: 2280, authenticated: 2255, observed: 2314, crowdRisk: 26, integrityRisk: 10, humanAlerts: 0, inflow: 82, outflow: 88 },
-  { id: "K", label: "Block K", ring: "outer", start: 178, end: 213, expected: 2510, authenticated: 2479, observed: 2551, crowdRisk: 29, integrityRisk: 12, humanAlerts: 0, inflow: 94, outflow: 86 },
-  { id: "C", label: "Block C", ring: "inner", start: 195, end: 225, expected: 1210, authenticated: 1194, observed: 1228, crowdRisk: 46, integrityRisk: 13, humanAlerts: 1, inflow: 64, outflow: 57 },
-  { id: "D", label: "Block D", ring: "inner", start: 226, end: 258, expected: 1370, authenticated: 1348, observed: 1411, crowdRisk: 52, integrityRisk: 17, humanAlerts: 0, inflow: 76, outflow: 49 },
-  { id: "E", label: "Block E", ring: "inner", start: 259, end: 289, expected: 1030, authenticated: 1016, observed: 1084, crowdRisk: 58, integrityRisk: 19, humanAlerts: 0, inflow: 81, outflow: 46 },
-  { id: "F", label: "Block F", ring: "inner", start: 290, end: 320, expected: 1135, authenticated: 1121, observed: 1198, crowdRisk: 62, integrityRisk: 22, humanAlerts: 0, inflow: 89, outflow: 51 },
-  { id: "G", label: "Block G", ring: "inner", start: 321, end: 351, expected: 1470, authenticated: 1444, observed: 1568, crowdRisk: 76, integrityRisk: 27, humanAlerts: 0, inflow: 126, outflow: 54 },
-  { id: "H", label: "Block H", ring: "inner", start: 352, end: 382, expected: 1180, authenticated: 1162, observed: 1210, crowdRisk: 44, integrityRisk: 14, humanAlerts: 0, inflow: 70, outflow: 68 },
-  { id: "B", label: "Block B", ring: "inner", start: 164, end: 194, expected: 1320, authenticated: 1301, observed: 1392, crowdRisk: 69, integrityRisk: 20, humanAlerts: 1, inflow: 111, outflow: 57 },
-  { id: "SPW", label: "South Premium West", ring: "premium", start: 130, end: 170, expected: 790, authenticated: 772, observed: 818, crowdRisk: 35, integrityRisk: 15, humanAlerts: 0, inflow: 34, outflow: 31 },
-  { id: "SPC", label: "South Premium Centre", ring: "premium", start: 171, end: 209, expected: 840, authenticated: 829, observed: 856, crowdRisk: 28, integrityRisk: 9, humanAlerts: 0, inflow: 28, outflow: 35 },
-  { id: "SPE", label: "South Premium East", ring: "premium", start: 210, end: 250, expected: 820, authenticated: 806, observed: 887, crowdRisk: 56, integrityRisk: 18, humanAlerts: 0, inflow: 55, outflow: 33 },
+const scenarioControls: Array<{ id: Scenario; label: string; icon: typeof Siren; tone: string }> = [
+  { id: "distress", label: "Distress", icon: Siren, tone: "danger" },
+  { id: "congestion", label: "Congestion", icon: UsersRound, tone: "danger" },
+  { id: "breach", label: "Barricade Breach", icon: Construction, tone: "danger" },
+  { id: "gateway", label: "Gateway Failure", icon: LockKeyhole, tone: "warning" },
+  { id: "redirect", label: "Redirect Crowd", icon: LocateFixed, tone: "teal" },
+  { id: "normal", label: "Reset", icon: RotateCcw, tone: "neutral" },
 ];
 
-const scenarioNotes: Record<Scenario, string> = {
-  normal: "Normal GT vs DC event state with live aggregate telemetry.",
-  distress: "Human Risk scenario: fall + low movement + abnormal SpO2 trend in Block B.",
-  congestion: "Crowd Risk scenario: Block G inflow rises while outflow drops.",
-  breach: "Population Integrity scenario: observed count diverges near Gate G8.",
-  gateway: "Gateway failure scenario: authenticated bands drop while CCTV stays stable.",
-  redirect: "Intervention scenario: inflow is redirected from Block G toward Block F.",
+const alertGroups: Array<{ title: string; count: number; tone: AlertTone; rows: Array<[string, string, string]> }> = [
+  { title: "Human Risk", count: 4, tone: "human", rows: [
+    ["20:33:41", "Medical Emergency - Gate G3", "High"],
+    ["20:33:02", "Unattended Child - Block F4", "High"],
+    ["20:32:18", "Heat Stress Report - Block K6", "Medium"],
+    ["20:31:47", "Person in Distress - Block B2", "Medium"],
+  ] },
+  { title: "Crowd Risk", count: 5, tone: "crowd", rows: [
+    ["20:34:05", "Congestion - Block H3", "Severe"],
+    ["20:33:28", "High Density - Block G5", "High"],
+    ["20:32:51", "Congestion - South Premium East", "High"],
+    ["20:32:10", "Bottleneck - Gate G7", "Medium"],
+    ["20:31:35", "High Density - Block M2", "Medium"],
+  ] },
+  { title: "Population Integrity", count: 3, tone: "integrity", rows: [
+    ["20:33:59", "Possible Ticket Forgery - Gate G5", "High"],
+    ["20:33:40", "Re-entry Attempt - Gate G2", "Medium"],
+    ["20:31:22", "Unregistered Access - Gate G8", "Medium"],
+  ] },
+];
+
+const timelineRows: Array<[string, string, "ALERT" | "ACTION" | "SYSTEM"]> = [
+  ["20:34:05", "Congestion detected - Block H3", "ALERT"],
+  ["20:33:41", "Medical emergency reported - Gate G3", "ALERT"],
+  ["20:33:28", "Field team dispatched - Gate G3", "ACTION"],
+  ["20:33:12", "Crowd flow normal - Block N", "SYSTEM"],
+  ["20:32:51", "Congestion detected - South Premium East", "ALERT"],
+];
+
+const riskColors: Record<RiskLevel, string> = {
+  low: "#76b85a", moderate: "#e1c326", high: "#ef9414", critical: "#ed4a37",
 };
 
-const scenarioConfig: Record<Scenario, { label: string; icon: typeof Siren; tone: string }> = {
-  normal: { label: "Reset", icon: RotateCcw, tone: "border-slate-600 text-slate-200 hover:border-slate-400" },
-  distress: { label: "Distress", icon: Ambulance, tone: "border-red-500/60 text-red-200 hover:border-red-300" },
-  congestion: { label: "Congestion", icon: Users, tone: "border-orange-500/60 text-orange-200 hover:border-orange-300" },
-  breach: { label: "Breach", icon: ShieldAlert, tone: "border-yellow-500/60 text-yellow-100 hover:border-yellow-300" },
-  gateway: { label: "Gateway", icon: Radio, tone: "border-cyan-500/60 text-cyan-100 hover:border-cyan-300" },
-  redirect: { label: "Redirect", icon: ArrowRightLeft, tone: "border-teal-500/60 text-teal-100 hover:border-teal-300" },
-};
-
-const riskClass: Record<RiskLevel, string> = {
-  low: "fill-emerald-500/75 stroke-emerald-200/50",
-  moderate: "fill-yellow-400/80 stroke-yellow-100/50",
-  high: "fill-orange-500/85 stroke-orange-100/55",
-  critical: "fill-red-500/90 stroke-red-100/70",
-};
-
-function fmt(value: number) {
-  return Number(value.toFixed(3));
-}
-
-function levelFor(score: number): RiskLevel {
-  if (score >= 80) return "critical";
-  if (score >= 60) return "high";
-  if (score >= 35) return "moderate";
-  return "low";
-}
-
+function fmt(value: number) { return Number(value.toFixed(3)); }
 function polar(cx: number, cy: number, radius: number, degrees: number) {
   const radians = ((degrees - 90) * Math.PI) / 180;
   return { x: fmt(cx + radius * Math.cos(radians)), y: fmt(cy + radius * Math.sin(radians)) };
 }
-
-function arcPath(cx: number, cy: number, inner: number, outer: number, start: number, end: number) {
-  const gap = 1.1;
-  const s = start + gap;
-  const e = end - gap;
-  const p1 = polar(cx, cy, outer, s);
-  const p2 = polar(cx, cy, outer, e);
-  const p3 = polar(cx, cy, inner, e);
-  const p4 = polar(cx, cy, inner, s);
-  const large = e - s > 180 ? 1 : 0;
-  return `M ${p1.x} ${p1.y} A ${outer} ${outer} 0 ${large} 1 ${p2.x} ${p2.y} L ${p3.x} ${p3.y} A ${inner} ${inner} 0 ${large} 0 ${p4.x} ${p4.y} Z`;
+function arcPath(cx: number, cy: number, inner: number, outer: number, start: number, end: number, gap = 0.6) {
+  const s = start + gap; const e = end - gap;
+  const p1 = polar(cx, cy, outer, s); const p2 = polar(cx, cy, outer, e);
+  const p3 = polar(cx, cy, inner, e); const p4 = polar(cx, cy, inner, s);
+  return `M ${p1.x} ${p1.y} A ${outer} ${outer} 0 ${e - s > 180 ? 1 : 0} 1 ${p2.x} ${p2.y} L ${p3.x} ${p3.y} A ${inner} ${inner} 0 ${e - s > 180 ? 1 : 0} 0 ${p4.x} ${p4.y} Z`;
 }
 
-function ringRadii(ring: Zone["ring"]) {
-  if (ring === "outer") return { inner: 214, outer: 286 };
-  if (ring === "inner") return { inner: 151, outer: 210 };
-  return { inner: 292, outer: 332 };
+function HeaderMetric({ label, children, accent }: { label: string; children: ReactNode; accent?: string }) {
+  return <div className="header-metric"><span>{label}</span><strong className={accent}>{children}</strong></div>;
 }
 
-function useScenarioZones(scenario: Scenario) {
-  return useMemo(() => {
-    return baseZones.map((zone) => {
-      if (scenario === "distress" && zone.id === "B") {
-        return { ...zone, humanAlerts: 4, crowdRisk: 74, observed: zone.observed + 42 };
-      }
-      if (scenario === "congestion" && zone.id === "G") {
-        return { ...zone, crowdRisk: 91, inflow: 248, outflow: 37, observed: zone.observed + 486, authenticated: zone.authenticated + 322 };
-      }
-      if (scenario === "breach" && zone.id === "H") {
-        return { ...zone, integrityRisk: 88, observed: zone.observed + 510, authenticated: zone.authenticated + 5, expected: zone.expected + 4 };
-      }
-      if (scenario === "gateway" && zone.id === "Q") {
-        return { ...zone, integrityRisk: 82, authenticated: Math.round(zone.authenticated * 0.62), crowdRisk: 48 };
-      }
-      if (scenario === "redirect" && zone.id === "G") {
-        return { ...zone, crowdRisk: 48, inflow: 82, outflow: 116, observed: zone.observed - 260 };
-      }
-      if (scenario === "redirect" && zone.id === "F") {
-        return { ...zone, crowdRisk: 54, inflow: 136, observed: zone.observed + 168 };
-      }
-      return zone;
-    });
-  }, [scenario]);
+function CommandHeader({ scenario }: { scenario: Scenario }) {
+  const { event } = getDigitalTwinSnapshot(scenario);
+  const authenticated = scenario === "gateway" ? 36_612 : scenario === "congestion" ? 38_569 : 38_247;
+  const observed = scenario === "breach" ? 42_402 : scenario === "congestion" ? 42_378 : 41_892;
+  return <header className="command-header">
+    <div className="brand-lockup"><ShieldCheck size={39} /><strong>MGHSIS</strong><span>Mass-Gathering Human<br />Safety Intelligence System</span></div>
+    <HeaderMetric label="Event"><span>GT vs DC - IPL 2025</span><i className="live-dot" /><small>LIVE</small></HeaderMetric>
+    <HeaderMetric label="Mode" accent="teal">Cricket Stadium</HeaderMetric>
+    <HeaderMetric label="Authenticated"><Users size={19} /> {authenticated.toLocaleString()}</HeaderMetric>
+    <HeaderMetric label="Observed (Est.)"><UsersRound size={19} /> {observed.toLocaleString()}</HeaderMetric>
+    <HeaderMetric label="Active Alerts" accent="red"><AlertTriangle size={19} /> 12</HeaderMetric>
+    <HeaderMetric label="System Health" accent={event.systemHealth === "GOOD" ? "green" : "amber"}><ShieldCheck size={19} /> {event.systemHealth}</HeaderMetric>
+    <HeaderMetric label="Event Time"><span className="event-clock">20:34:18</span><small className="event-date">Wed, 14 May 2025</small></HeaderMetric>
+  </header>;
 }
 
-function StadiumTwin({ zones, selectedZone, onSelect }: { zones: Zone[]; selectedZone: string; onSelect: (id: string) => void }) {
-  return (
-    <section className="panel twin-panel">
-      <div className="panel-title">
-        <div>
-          <p className="label">Digital Twin</p>
-          <h2>Cricket Stadium Heatmap</h2>
-        </div>
-        <div className="live-chip"><CircleDot size={12} /> Live fusion stream</div>
-      </div>
-      <div className="stadium-frame">
-        <svg viewBox="0 0 720 720" role="img" aria-label="Cricket stadium digital twin with risk heatmap zones">
-          <defs>
-            <radialGradient id="field" cx="50%" cy="48%" r="55%">
-              <stop offset="0%" stopColor="#b9dc93" />
-              <stop offset="100%" stopColor="#75a55f" />
-            </radialGradient>
-          </defs>
-          <circle cx="360" cy="360" r="324" className="outer-shell" />
-          <circle cx="360" cy="360" r="211" className="concourse" />
-          <circle cx="360" cy="360" r="145" fill="url(#field)" />
-          <path d="M348 297h24v126h-24z" className="pitch" />
-          <text x="360" y="345" textAnchor="middle" className="field-title">GUJARAT</text>
-          <text x="360" y="377" textAnchor="middle" className="field-title large">TITANS</text>
-          {zones.map((zone) => {
-            const { inner, outer } = ringRadii(zone.ring);
-            const level = levelFor(Math.max(zone.crowdRisk, zone.integrityRisk));
-            const mid = (zone.start + zone.end) / 2;
-            const labelPos = polar(360, 360, (inner + outer) / 2, mid);
-            return (
-              <g key={zone.id}>
-                <path
-                  d={arcPath(360, 360, inner, outer, zone.start, zone.end)}
-                  className={`${riskClass[level]} stadium-zone ${selectedZone === zone.id ? "selected-zone" : ""}`}
-                  onClick={() => onSelect(zone.id)}
-                />
-                <text
-                  x={labelPos.x}
-                  y={labelPos.y}
-                  textAnchor="middle"
-                  dominantBaseline="middle"
-                  className="zone-label"
-                  transform={`rotate(${mid}, ${labelPos.x}, ${labelPos.y})`}
-                >
-                  {zone.id}
-                </text>
-              </g>
-            );
-          })}
-          {["N", "NE", "E", "SE", "S", "SW", "W", "NW"].map((dir, index) => {
-            const point = polar(360, 360, 126, index * 45);
-            return <text key={dir} x={point.x} y={point.y} textAnchor="middle" className="direction-label">{dir}</text>;
-          })}
-          <g className="markers">
-            <circle cx="564" cy="546" r="9" />
-            <text x="578" y="550">G8</text>
-            <circle cx="206" cy="480" r="8" />
-            <text x="164" y="484">CAM-B</text>
-            <circle cx="540" cy="240" r="8" />
-            <text x="552" y="244">CAM-F</text>
-          </g>
-        </svg>
-        <div className="legend">
-          <span><i className="bg-emerald-400" /> Low</span>
-          <span><i className="bg-yellow-300" /> Moderate</span>
-          <span><i className="bg-orange-500" /> High</span>
-          <span><i className="bg-red-500" /> Critical</span>
-        </div>
-      </div>
-    </section>
-  );
+function StatusOverlay({ capacity, scenario }: { capacity: number; scenario: Scenario }) {
+  return <section className="status-overlay">
+    <h2>Stadium Status</h2>
+    <dl>
+      <div><dt>Overall Risk</dt><dd className="risk-high">{scenario === "normal" ? "High" : "Severe"}</dd></div>
+      <div><dt>Weather</dt><dd><CloudSun size={15} /> 28°C</dd></div>
+      <div><dt>Capacity</dt><dd>{capacity}%</dd></div>
+      <div><dt>Wind</dt><dd><Wind size={14} /> 12 km/h</dd></div>
+      <div><dt>Visibility</dt><dd>Good</dd></div>
+    </dl>
+    <footer><span>Last Updated</span><strong>20:34:18</strong></footer>
+  </section>;
 }
 
-function RiskRail({ zones, scenario, onScenario }: { zones: Zone[]; scenario: Scenario; onScenario: (scenario: Scenario) => void }) {
-  const selectedAlerts = [
-    { title: "Person in distress", zone: scenario === "distress" ? "Block B" : "Block C", type: "Human Risk", severity: "High", icon: Ambulance },
-    { title: "Congestion developing", zone: scenario === "redirect" ? "Block F" : "Block G", type: "Crowd Risk", severity: scenario === "congestion" ? "Critical" : "High", icon: Users },
-    { title: "Population Integrity Anomaly", zone: scenario === "breach" ? "Gate G8 / Block H" : "Block Q", type: "Integrity", severity: scenario === "breach" || scenario === "gateway" ? "Critical" : "Moderate", icon: ShieldAlert },
-  ];
-  const criticalZones = zones.filter((zone) => Math.max(zone.crowdRisk, zone.integrityRisk) >= 75);
-
-  return (
-    <aside className="rail">
-      <div className="panel">
-        <div className="panel-title">
-          <div>
-            <p className="label">Active Alerts</p>
-            <h2>{criticalZones.length + 9} open signals</h2>
-          </div>
-          <AlertTriangle className="text-red-300" size={22} />
-        </div>
-        <div className="tabs">
-          <span>All 12</span>
-          <span>Human 4</span>
-          <span>Crowd 5</span>
-          <span>Integrity 3</span>
-        </div>
-        <div className="alert-list">
-          {selectedAlerts.map((alert) => {
-            const Icon = alert.icon;
-            return (
-              <article key={alert.title} className="alert-row">
-                <Icon size={18} />
-                <div>
-                  <strong>{alert.title}</strong>
-                  <span>{alert.type} - {alert.zone}</span>
-                </div>
-                <b>{alert.severity}</b>
-              </article>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="panel">
-        <p className="label">Scenario Controls</p>
-        <div className="scenario-grid">
-          {(Object.keys(scenarioConfig) as Scenario[]).map((key) => {
-            const config = scenarioConfig[key];
-            const Icon = config.icon;
-            return (
-              <button key={key} className={`scenario-button ${config.tone}`} onClick={() => onScenario(key)}>
-                <Icon size={20} />
-                <span>{config.label}</span>
-              </button>
-            );
-          })}
-        </div>
-        <p className="scenario-note">{scenarioNotes[scenario]}</p>
-      </div>
-    </aside>
-  );
+function MapTools({ zoom, setZoom }: { zoom: number; setZoom: (value: number) => void }) {
+  return <div className="map-tools" aria-label="Digital twin map tools">
+    <div><button title="Select zone"><MousePointer2 size={19} /></button><button title="Pan map"><Hand size={19} /></button><button title="Fit stadium"><Crosshair size={19} /></button></div>
+    <div><button title="Zoom in" onClick={() => setZoom(Math.min(1.16, zoom + 0.04))}><Plus size={20} /></button><button title="Zoom out" onClick={() => setZoom(Math.max(0.88, zoom - 0.04))}><Minus size={20} /></button></div>
+  </div>;
 }
 
-function ZoneDrawer({ zone }: { zone: Zone }) {
-  const density = zone.observed / Math.max(zone.expected, 1);
-  const overall = Math.round(zone.crowdRisk * 0.55 + zone.integrityRisk * 0.2 + zone.humanAlerts * 12);
-  return (
-    <section className="panel zone-drawer">
-      <div className="panel-title">
-        <div>
-          <p className="label">Selected Zone</p>
-          <h2>{zone.label}</h2>
-        </div>
-        <span className={`risk-pill ${levelFor(overall)}`}>{levelFor(overall).toUpperCase()}</span>
-      </div>
-      <div className="zone-stats">
-        <Metric label="Expected" value={zone.expected.toLocaleString()} />
-        <Metric label="Authenticated" value={zone.authenticated.toLocaleString()} />
-        <Metric label="Observed" value={zone.observed.toLocaleString()} />
-        <Metric label="Density" value={`${density.toFixed(2)}x`} />
-      </div>
-      <div className="explain">
-        <div><Gauge size={16} /> Crowd risk {zone.crowdRisk}/100 from density, accumulation, and movement slowdown.</div>
-        <div><BadgeCheck size={16} /> Integrity risk {zone.integrityRisk}/100 from expected/authenticated/observed divergence.</div>
-        <div><Activity size={16} /> Inflow {zone.inflow}/min, outflow {zone.outflow}/min, human alerts {zone.humanAlerts}.</div>
-      </div>
-    </section>
-  );
+function RiskLegend() {
+  return <section className="risk-legend"><h3>Risk Level</h3>
+    <span><i className="low" />Low (0-30%)</span><span><i className="moderate" />Moderate (31-60%)</span>
+    <span><i className="high" />High (61-80%)</span><span><i className="severe" />Severe (81-100%)</span><span><i className="none" />No Data</span>
+  </section>;
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="metric">
-      <span>{label}</span>
-      <strong>{value}</strong>
+function BowlSector({ zone, selected, onSelect }: { zone: Zone; selected: boolean; onSelect: (id: string) => void }) {
+  const level = levelFor(Math.max(zone.crowdRisk, zone.integrityRisk));
+  const radii = zone.ring === "outer" ? [250, 343] : zone.ring === "premium" ? [348, 389] : [182, 246];
+  const mid = (zone.start + zone.end) / 2;
+  const label = polar(450, 330, (radii[0] + radii[1]) / 2, mid);
+  const divisions = zone.ring === "premium" ? 3 : 5;
+  return <g className={`bowl-sector ${selected ? "selected" : ""}`} onClick={() => onSelect(zone.id)}>
+    {Array.from({ length: divisions }, (_, index) => {
+      const size = (zone.end - zone.start) / divisions;
+      return <path key={index} d={arcPath(450, 330, radii[0], radii[1], zone.start + index * size, zone.start + (index + 1) * size, 0.25)} fill={zone.ring === "outer" ? "#5c99ad" : riskColors[level]} className="seat-wedge" />;
+    })}
+    <text x={label.x} y={label.y} textAnchor="middle" dominantBaseline="middle" transform={`rotate(${mid}, ${label.x}, ${label.y})`} className="block-label">{zone.id.length === 1 ? `BLOCK ${zone.id}` : zone.id}</text>
+  </g>;
+}
+
+function StadiumTwin({ zones, selectedZone, onSelect, zoom }: { zones: Zone[]; selectedZone: string; onSelect: (id: string) => void; zoom: number }) {
+  const sectionTicks = useMemo(() => Array.from({ length: 52 }, (_, index) => index * (360 / 52)), []);
+  return <div className="stadium-stage" style={{ "--stadium-zoom": zoom } as CSSProperties}>
+    <svg viewBox="0 0 900 690" role="img" aria-label="Interactive cricket stadium digital twin risk heatmap">
+      <defs>
+        <radialGradient id="turf" cx="50%" cy="43%" r="64%"><stop offset="0%" stopColor="#78a85c" /><stop offset="65%" stopColor="#628f4d" /><stop offset="100%" stopColor="#4f7942" /></radialGradient>
+        <linearGradient id="outerBowl" x1="0" y1="0" x2="0" y2="1"><stop stopColor="#73b3c6" /><stop offset="1" stopColor="#4d8ea5" /></linearGradient>
+        <filter id="stadiumShadow"><feDropShadow dx="0" dy="12" stdDeviation="12" floodColor="#000" floodOpacity=".55" /></filter>
+      </defs>
+      <g className="stadium-geometry" filter="url(#stadiumShadow)">
+        <ellipse cx="450" cy="330" rx="345" ry="267" className="outer-bowl" />
+        {sectionTicks.map((angle) => { const outside = polar(450, 330, 343, angle); const inside = polar(450, 330, 250, angle); return <line key={angle} x1={inside.x} y1={inside.y} x2={outside.x} y2={outside.y} className="section-line" />; })}
+        <ellipse cx="450" cy="330" rx="248" ry="192" className="concourse-ring" />
+        <g transform="translate(0 75.9) scale(1 .77)">
+          {zones.map((zone) => <BowlSector key={zone.id} zone={zone} selected={selectedZone === zone.id} onSelect={onSelect} />)}
+        </g>
+        <ellipse cx="450" cy="330" rx="181" ry="140" fill="url(#turf)" className="field" />
+        <ellipse cx="450" cy="330" rx="154" ry="117" className="field-ring" />
+        <path d="M450 230 L500 282 L482 282 L526 335 L488 335 L546 407 L450 382 L354 407 L412 335 L374 335 L418 282 L400 282 Z" className="neutral-field-mark" />
+        <rect x="440" y="289" width="20" height="82" rx="1" className="pitch" /><line x1="437" y1="299" x2="463" y2="299" className="crease" /><line x1="437" y1="361" x2="463" y2="361" className="crease" />
+        {[[450,205,"N"],[560,235,"NE"],[620,334,"E"],[555,432,"SE"],[450,467,"S"],[342,432,"SW"],[280,334,"W"],[340,235,"NW"]].map(([x,y,label]) => <text key={String(label)} x={x} y={y} className="direction">{label}</text>)}
+        <path d="M274 530 Q450 650 626 530 L684 604 Q450 746 216 604 Z" className="premium-shell" /><path d="M305 540 Q450 626 595 540" className="premium-divider" /><path d="M278 575 Q450 688 622 575" className="premium-divider" />
+        <text x="450" y="585" className="premium-label">PRESIDENT GALLERY</text><text x="450" y="623" className="premium-label">PRESIDENTIAL SUITES 4TH FLOOR</text><text x="450" y="663" className="premium-label">PREMIUM SUITES 5TH FLOOR</text>
+        {[[305,531,"G1","gate-green"],[353,556,"G3",""],[548,556,"G6",""],[601,529,"G8","gate-red"]].map(([x,y,text,className]) => <g key={String(text)}><rect x={Number(x)-15} y={Number(y)-12} width="30" height="24" className={`gate ${className}`} /><text x={x} y={Number(y)+5} className="gate-label">{text}</text></g>)}
+      </g>
+    </svg>
+  </div>;
+}
+
+function AlertPanel() {
+  const [activeTab, setActiveTab] = useState<"all" | AlertTone>("all");
+  const visible = activeTab === "all" ? alertGroups : alertGroups.filter((group) => group.tone === activeTab);
+  return <section className="alerts-panel"><h2>Active Alerts</h2>
+    <div className="alert-tabs">
+      <button className={activeTab === "all" ? "active" : ""} onClick={() => setActiveTab("all")}>All <b>12</b></button>
+      <button className={activeTab === "human" ? "active" : ""} onClick={() => setActiveTab("human")}>Human Risk <b className="red-badge">4</b></button>
+      <button className={activeTab === "crowd" ? "active" : ""} onClick={() => setActiveTab("crowd")}>Crowd Risk <b className="orange-badge">5</b></button>
+      <button className={activeTab === "integrity" ? "active" : ""} onClick={() => setActiveTab("integrity")}>Pop. Integrity <b className="yellow-badge">3</b></button>
     </div>
-  );
+    <div className="alert-groups">{visible.map((group) => <article key={group.title} className={`alert-group ${group.tone}`}><header><strong>{group.title}</strong><span>{group.count} Alerts</span></header><div>{group.rows.map(([time,message,severity]) => <p key={`${time}-${message}`}><time>{time}</time><span>{message}</span><b className={severity.toLowerCase()}>{severity}</b></p>)}</div></article>)}</div>
+    <button className="feed-button"><ListFilter size={18} /> View Alert Feed</button>
+  </section>;
 }
 
-export default function Home() {
-  const [scenario, setScenario] = useState<Scenario>("normal");
-  const zones = useScenarioZones(scenario);
-  const [selectedZone, setSelectedZone] = useState("G");
-  const selected = zones.find((zone) => zone.id === selectedZone) ?? zones[0];
-  const totals = zones.reduce(
-    (acc, zone) => ({
-      expected: acc.expected + zone.expected,
-      authenticated: acc.authenticated + zone.authenticated,
-      observed: acc.observed + zone.observed,
-      alerts: acc.alerts + zone.humanAlerts + (zone.crowdRisk > 60 ? 1 : 0) + (zone.integrityRisk > 60 ? 1 : 0),
-    }),
-    { expected: 0, authenticated: 0, observed: 0, alerts: 0 },
-  );
-
-  return (
-    <main className="min-h-screen bg-[#070b0f] text-slate-100">
-      <header className="command-header">
-        <div className="brand">
-          <ShieldAlert size={34} />
-          <div>
-            <strong>MGHSIS</strong>
-            <span>Mass-Gathering Human Safety Intelligence System</span>
-          </div>
-        </div>
-        <Metric label="Event" value="GT vs DC - IPL 2025" />
-        <Metric label="Mode" value="Cricket Stadium" />
-        <Metric label="Authenticated" value={totals.authenticated.toLocaleString()} />
-        <Metric label="Observed Est." value={totals.observed.toLocaleString()} />
-        <Metric label="Active Alerts" value={String(Math.max(12, totals.alerts))} />
-        <Metric label="System Health" value={scenario === "gateway" ? "Degraded" : "Good"} />
-        <Metric label="Event Time" value="20:34 IST" />
-      </header>
-
-      <div className="dashboard-grid">
-        <section className="side-status panel">
-          <p className="label">Stadium Status</p>
-          <Metric label="Overall Risk" value={scenario === "normal" ? "High" : "Critical"} />
-          <Metric label="Capacity" value="62%" />
-          <Metric label="CCTV Confidence" value="91%" />
-          <Metric label="Gateway Health" value={scenario === "gateway" ? "62%" : "98%"} />
-          <div className="source-card">
-            <Camera size={18} />
-            <span>CAM-F and CAM-B mapped to bowl sectors. No facial recognition enabled.</span>
-          </div>
-          <Image
-            src="/references/cricket-stadium-reference.png"
-            alt="Reference seating layout used for the cricket stadium digital twin"
-            width={743}
-            height={685}
-            className="reference-map"
-            priority
-          />
-        </section>
-
-        <StadiumTwin zones={zones} selectedZone={selected.id} onSelect={setSelectedZone} />
-        <RiskRail zones={zones} scenario={scenario} onScenario={setScenario} />
-        <ZoneDrawer zone={selected} />
-
-        <section className="panel timeline">
-          <div className="panel-title">
-            <div>
-              <p className="label">Event Timeline</p>
-              <h2>Audit-ready operations log</h2>
-            </div>
-          </div>
-          {[
-            "20:34:05 Congestion detected - Block G",
-            "20:33:59 Population Integrity Anomaly - Gate G8",
-            "20:33:41 Medical team dispatched - Block B",
-            "20:32:51 CCTV observation fused - South Premium East",
-          ].map((item) => (
-            <div className="timeline-row" key={item}>
-              <Radio size={14} />
-              <span>{item}</span>
-            </div>
-          ))}
-        </section>
-      </div>
-    </main>
-  );
+function KeyMetrics({ zones, selectedZone }: { zones: Zone[]; selectedZone: Zone }) {
+  const atRisk = zones.filter((zone) => Math.max(zone.crowdRisk, zone.integrityRisk) >= 60).length;
+  const metrics = [
+    ["Average Density","0.68","per m²","High",Users], ["Peak Density","1.92","per m²","Severe",Activity],
+    ["Congestion Zones",String(Math.max(7, atRisk)),"","Active",null], ["Gates At Risk","2","","High",null],
+    ["Medical Cases",String(Math.max(1, selectedZone.humanAlerts)),"","Active",HeartPulse],
+  ] as const;
+  return <section className="metrics-panel"><h2>Key Metrics</h2><div className="metric-cards">{metrics.map(([label,value,unit,state,Icon]) => <article key={label}><span>{label}</span><div>{Icon ? <Icon size={25} /> : null}<strong>{value}</strong></div><small>{unit || "\u00a0"}</small><b className={state.toLowerCase()}>{state}</b></article>)}</div><footer><span>Data Source: Multi-sensor Fusion</span><span>System ID: MGHSIS-GT-CC-01</span><span>Operator: Command Operator 1</span><b>Connected</b></footer></section>;
 }
+
+function EventTimeline() {
+  const [tab, setTab] = useState<"ALL" | "ALERT" | "ACTION" | "SYSTEM">("ALL");
+  const visible = tab === "ALL" ? timelineRows : timelineRows.filter((row) => row[2] === tab);
+  return <section className="timeline-panel"><h2>Event Timeline</h2><div className="timeline-tabs">{(["ALL","ALERT","ACTION","SYSTEM"] as const).map((item) => <button key={item} className={tab === item ? "active" : ""} onClick={() => setTab(item)}>{item === "ALERT" ? <Siren size={11} /> : item === "ACTION" ? <Radio size={11} /> : null}{item}{item === "ALERT" || item === "ACTION" ? "S" : ""}</button>)}</div><div className="timeline-list">{visible.map(([time,message,type]) => <p key={`${time}-${message}`}><time>{time}</time><span>{message}</span><b className={type.toLowerCase()}>{type}</b></p>)}</div><button className="timeline-full">View Full Timeline <span>›</span></button></section>;
+}
+
+function ScenarioPanel({ scenario, onScenario }: { scenario: Scenario; onScenario: (scenario: Scenario) => void }) {
+  return <section className="scenario-panel"><h2>Scenario Controls</h2><div className="scenario-grid">{scenarioControls.map(({id,label,icon:Icon,tone}) => <button key={id} className={`${tone} ${scenario === id ? "active" : ""}`} onClick={() => onScenario(id)}><Icon size={31} /><span>{label}</span></button>)}</div><p>{scenarioNotes[scenario]} All actions require authorization.</p></section>;
+}
+
+export function CommandCenterDashboard() {
+  const [scenario, setScenario] = useState<Scenario>("normal"); const [selectedZone, setSelectedZone] = useState("G"); const [zoom, setZoom] = useState(1);
+  const { zones } = getDigitalTwinSnapshot(scenario); const selected = zones.find((zone) => zone.id === selectedZone) ?? zones[0]; const capacity = scenario === "normal" ? 62 : scenario === "congestion" ? 67 : 64;
+  return <main className="command-center"><CommandHeader scenario={scenario} /><div className="operations-grid">
+    <section className="twin-workspace"><StatusOverlay capacity={capacity} scenario={scenario} /><MapTools zoom={zoom} setZoom={setZoom} /><RiskLegend /><StadiumTwin zones={zones} selectedZone={selected.id} onSelect={setSelectedZone} zoom={zoom} /></section>
+    <AlertPanel /><KeyMetrics zones={zones} selectedZone={selected} /><EventTimeline /><ScenarioPanel scenario={scenario} onScenario={setScenario} />
+  </div></main>;
+}
+
+export default function Home() { return <CommandCenterDashboard />; }
