@@ -12,6 +12,16 @@ import {
 } from "@/lib/mghsis-demo";
 
 type AlertTone = "human" | "crowd" | "integrity";
+type VisualSector = {
+  id: string;
+  label: string;
+  zoneId: string;
+  ring: "outer" | "inner" | "premium";
+  start: number;
+  end: number;
+  color: string;
+  divisions: number;
+};
 
 const scenarioControls: Array<{ id: Scenario; label: string; icon: typeof Siren; tone: string }> = [
   { id: "distress", label: "Distress", icon: Siren, tone: "danger" },
@@ -54,6 +64,28 @@ const timelineRows: Array<[string, string, "ALERT" | "ACTION" | "SYSTEM"]> = [
 const riskColors: Record<RiskLevel, string> = {
   low: "#76b85a", moderate: "#e1c326", high: "#ef9414", critical: "#ed4a37",
 };
+
+const visualSectors: VisualSector[] = [
+  { id: "M", label: "Block M", zoneId: "M", ring: "outer", start: 310, end: 352, color: "#5c99ad", divisions: 6 },
+  { id: "N", label: "Block N", zoneId: "N", ring: "outer", start: 352, end: 392, color: "#5c99ad", divisions: 7 },
+  { id: "P", label: "Block P", zoneId: "P", ring: "outer", start: 32, end: 68, color: "#5c99ad", divisions: 6 },
+  { id: "Q", label: "Block Q", zoneId: "Q", ring: "outer", start: 68, end: 103, color: "#5c99ad", divisions: 6 },
+  { id: "R", label: "Block R", zoneId: "R", ring: "outer", start: 103, end: 139, color: "#5c99ad", divisions: 6 },
+  { id: "J", label: "Block J", zoneId: "J", ring: "outer", start: 221, end: 257, color: "#5c99ad", divisions: 6 },
+  { id: "K", label: "Block K", zoneId: "K", ring: "outer", start: 257, end: 286, color: "#5c99ad", divisions: 5 },
+  { id: "L", label: "Block L", zoneId: "M", ring: "outer", start: 286, end: 310, color: "#5c99ad", divisions: 4 },
+  { id: "D", label: "Block D", zoneId: "D", ring: "inner", start: 309, end: 349, color: "#ef8f17", divisions: 6 },
+  { id: "E", label: "Block E", zoneId: "E", ring: "inner", start: 349, end: 385, color: "#ef8f17", divisions: 6 },
+  { id: "F", label: "Block F", zoneId: "F", ring: "inner", start: 25, end: 61, color: "#e7b51d", divisions: 6 },
+  { id: "G", label: "Block G", zoneId: "G", ring: "inner", start: 61, end: 94, color: "#ef9414", divisions: 5 },
+  { id: "H", label: "Block H", zoneId: "H", ring: "inner", start: 94, end: 128, color: "#ef7b22", divisions: 5 },
+  { id: "A", label: "Block A", zoneId: "SPE", ring: "inner", start: 218, end: 254, color: "#e7a916", divisions: 5 },
+  { id: "B", label: "Block B", zoneId: "B", ring: "inner", start: 254, end: 281, color: "#f08d14", divisions: 4 },
+  { id: "C", label: "Block C", zoneId: "C", ring: "inner", start: 281, end: 309, color: "#ec4b39", divisions: 4 },
+  { id: "SPW", label: "South Premium West", zoneId: "SPW", ring: "premium", start: 128, end: 161, color: "#f0b61f", divisions: 3 },
+  { id: "SPC", label: "South Premium Centre", zoneId: "SPC", ring: "premium", start: 161, end: 199, color: "#e6e3da", divisions: 4 },
+  { id: "SPE", label: "South Premium East", zoneId: "SPE", ring: "premium", start: 199, end: 232, color: "#aabd4d", divisions: 3 },
+];
 
 function fmt(value: number) { return Number(value.toFixed(3)); }
 function polar(cx: number, cy: number, radius: number, degrees: number) {
@@ -115,18 +147,29 @@ function RiskLegend() {
   </section>;
 }
 
-function BowlSector({ zone, selected, onSelect }: { zone: Zone; selected: boolean; onSelect: (id: string) => void }) {
+function BowlSector({ sector, zone, selected, onSelect }: { sector: VisualSector; zone: Zone; selected: boolean; onSelect: (id: string) => void }) {
   const level = levelFor(Math.max(zone.crowdRisk, zone.integrityRisk));
-  const radii = zone.ring === "outer" ? [250, 343] : zone.ring === "premium" ? [348, 389] : [182, 246];
-  const mid = (zone.start + zone.end) / 2;
+  const radii = sector.ring === "outer" ? [250, 343] : [182, 246];
+  const mid = (sector.start + sector.end) / 2;
   const label = polar(450, 330, (radii[0] + radii[1]) / 2, mid);
-  const divisions = zone.ring === "premium" ? 3 : 5;
-  return <g className={`bowl-sector ${selected ? "selected" : ""}`} onClick={() => onSelect(zone.id)}>
-    {Array.from({ length: divisions }, (_, index) => {
-      const size = (zone.end - zone.start) / divisions;
-      return <path key={index} d={arcPath(450, 330, radii[0], radii[1], zone.start + index * size, zone.start + (index + 1) * size, 0.25)} fill={zone.ring === "outer" ? "#5c99ad" : riskColors[level]} className="seat-wedge" />;
+  const fill = level === "critical" ? riskColors.critical : sector.color;
+  return <g className={`bowl-sector ${selected ? "selected" : ""}`} onClick={() => onSelect(sector.zoneId)}>
+    {Array.from({ length: sector.divisions }, (_, index) => {
+      const size = (sector.end - sector.start) / sector.divisions;
+      const sectionMid = sector.start + size * index + size / 2;
+      const seatPosition = polar(450, 330, radii[0] + (sector.ring === "outer" ? 25 : 18), sectionMid);
+      return <g key={index}>
+        <path d={arcPath(450, 330, radii[0], radii[1], sector.start + index * size, sector.start + (index + 1) * size, 0.25)} fill={fill} className="seat-wedge" />
+        <text x={seatPosition.x} y={seatPosition.y} textAnchor="middle" dominantBaseline="middle" transform={`rotate(${sectionMid}, ${seatPosition.x}, ${seatPosition.y})`} className="seat-number">{index + 1}</text>
+      </g>;
     })}
-    <text x={label.x} y={label.y} textAnchor="middle" dominantBaseline="middle" transform={`rotate(${mid}, ${label.x}, ${label.y})`} className="block-label">{zone.id.length === 1 ? `BLOCK ${zone.id}` : zone.id}</text>
+    <text x={label.x} y={label.y} textAnchor="middle" dominantBaseline="middle" transform={sector.ring === "premium" ? undefined : `rotate(${mid}, ${label.x}, ${label.y})`} className={`block-label ${sector.ring === "premium" ? "premium-block-label" : ""}`}>
+      {sector.ring === "premium" ? <>
+        <tspan x={label.x} dy="-9">SOUTH</tspan>
+        <tspan x={label.x} dy="10">PREMIUM</tspan>
+        <tspan x={label.x} dy="10">{sector.label.split(" ").at(-1)?.toUpperCase()}</tspan>
+      </> : sector.label.toUpperCase()}
+    </text>
   </g>;
 }
 
@@ -144,7 +187,10 @@ function StadiumTwin({ zones, selectedZone, onSelect, zoom }: { zones: Zone[]; s
         {sectionTicks.map((angle) => { const outside = polar(450, 330, 343, angle); const inside = polar(450, 330, 250, angle); return <line key={angle} x1={inside.x} y1={inside.y} x2={outside.x} y2={outside.y} className="section-line" />; })}
         <ellipse cx="450" cy="330" rx="248" ry="192" className="concourse-ring" />
         <g transform="translate(0 75.9) scale(1 .77)">
-          {zones.map((zone) => <BowlSector key={zone.id} zone={zone} selected={selectedZone === zone.id} onSelect={onSelect} />)}
+          {visualSectors.map((sector) => {
+            const zone = zones.find((item) => item.id === sector.zoneId) ?? zones[0];
+            return <BowlSector key={sector.id} sector={sector} zone={zone} selected={selectedZone === sector.zoneId} onSelect={onSelect} />;
+          })}
         </g>
         <ellipse cx="450" cy="330" rx="181" ry="140" fill="url(#turf)" className="field" />
         <ellipse cx="450" cy="330" rx="154" ry="117" className="field-ring" />
