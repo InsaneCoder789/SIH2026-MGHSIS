@@ -120,10 +120,7 @@ class CrowdRiskModel:
             "synthetic_only": True,
         }
 
-    def predict(self, observation: CrowdObservation) -> CrowdRiskPrediction:
-        bundle = self.load()
-        model = bundle["model"]
-        probabilities_raw = model.predict_proba(observation_to_features(observation))[0]
+    def _prediction_from_probabilities(self, observation: CrowdObservation, probabilities_raw: np.ndarray, bundle: dict[str, object]) -> CrowdRiskPrediction:
         probabilities = {RISK_LABELS[index]: float(probabilities_raw[index]) for index in range(len(RISK_LABELS))}
         level = max(probabilities, key=probabilities.get)  # type: ignore[arg-type]
         score = sum(probabilities[label] * RISK_MIDPOINTS[label] for label in RISK_LABELS)
@@ -143,6 +140,14 @@ class CrowdRiskModel:
             timestamp=observation.timestamp,
         )
 
+    def predict_many(self, observations: list[CrowdObservation]) -> list[CrowdRiskPrediction]:
+        bundle = self.load()
+        model = bundle["model"]
+        matrix = np.vstack([observation_to_features(observation)[0] for observation in observations])
+        return [self._prediction_from_probabilities(observation, probabilities, bundle) for observation, probabilities in zip(observations, model.predict_proba(matrix), strict=True)]
+
+    def predict(self, observation: CrowdObservation) -> CrowdRiskPrediction:
+        return self.predict_many([observation])[0]
+
 
 crowd_risk_model = CrowdRiskModel()
-

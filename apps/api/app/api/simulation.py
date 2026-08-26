@@ -126,13 +126,14 @@ class SimulationState:
     def snapshot(self, advance: bool = True) -> dict[str, object]:
         if advance and self.running:
             self.tick += 1
-        predictions = []
+        observations = []
         for zone_id, (capacity, area) in ZONE_CONFIG.items():
             observation = self._observation(zone_id, capacity, area)
-            predictions.append({
-                "observation": observation.model_dump(mode="json"),
-                "prediction": crowd_risk_model.predict(observation).model_dump(mode="json"),
-            })
+            observations.append(observation)
+        predictions = [{
+            "observation": observation.model_dump(mode="json"),
+            "prediction": prediction.model_dump(mode="json"),
+        } for observation, prediction in zip(observations, crowd_risk_model.predict_many(observations), strict=True)]
         scores = [item["prediction"]["score"] for item in predictions]
         return {
             "simulation_id": "virtual-live-event",

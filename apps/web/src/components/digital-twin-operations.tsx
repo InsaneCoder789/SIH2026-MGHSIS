@@ -93,9 +93,14 @@ export function DigitalTwinOperations() {
 
   useEffect(() => {
     if (twinTab !== "VIRTUALISATION") return;
-    const load = () => fetch("/api/simulation", { cache: "no-store" }).then((response) => response.ok ? response.json() : Promise.reject()).then((payload: TwinSimulationState) => setSimulation(payload)).catch(() => undefined);
+    const inFlight = { current: false };
+    const load = () => {
+      if (inFlight.current) return;
+      inFlight.current = true;
+      fetch("/api/simulation", { cache: "no-store" }).then((response) => response.ok ? response.json() : Promise.reject()).then((payload: TwinSimulationState) => setSimulation(payload)).catch(() => undefined).finally(() => { inFlight.current = false; });
+    };
     load();
-    const timer = window.setInterval(load, 1000);
+    const timer = window.setInterval(load, 2500);
     return () => window.clearInterval(timer);
   }, [twinTab]);
   const virtualZones = zones.map((item) => {
