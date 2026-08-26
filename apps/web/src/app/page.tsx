@@ -197,9 +197,15 @@ function StadiumTwin({ zones, selectedZone, onSelect, zoom }: { zones: Zone[]; s
         <path d="M450 230 L500 282 L482 282 L526 335 L488 335 L546 407 L450 382 L354 407 L412 335 L374 335 L418 282 L400 282 Z" className="neutral-field-mark" />
         <rect x="440" y="289" width="20" height="82" rx="1" className="pitch" /><line x1="437" y1="299" x2="463" y2="299" className="crease" /><line x1="437" y1="361" x2="463" y2="361" className="crease" />
         {[[450,205,"N"],[560,235,"NE"],[620,334,"E"],[555,432,"SE"],[450,467,"S"],[342,432,"SW"],[280,334,"W"],[340,235,"NW"]].map(([x,y,label]) => <text key={String(label)} x={x} y={y} className="direction">{label}</text>)}
-        <path d="M274 530 Q450 650 626 530 L684 604 Q450 746 216 604 Z" className="premium-shell" /><path d="M305 540 Q450 626 595 540" className="premium-divider" /><path d="M278 575 Q450 688 622 575" className="premium-divider" />
-        <text x="450" y="585" className="premium-label">PRESIDENT GALLERY</text><text x="450" y="623" className="premium-label">PRESIDENTIAL SUITES 4TH FLOOR</text><text x="450" y="663" className="premium-label">PREMIUM SUITES 5TH FLOOR</text>
-        {[[305,531,"G1","gate-green"],[353,556,"G3",""],[548,556,"G6",""],[601,529,"G8","gate-red"]].map(([x,y,text,className]) => <g key={String(text)}><rect x={Number(x)-15} y={Number(y)-12} width="30" height="24" className={`gate ${className}`} /><text x={x} y={Number(y)+5} className="gate-label">{text}</text></g>)}
+        <g className="premium-tiers">
+          <path d="M280 520 Q450 600 620 520 L650 545 Q450 650 250 545 Z" className="premium-tier tier-gallery" />
+          <path d="M250 545 Q450 650 650 545 L678 580 Q450 705 222 580 Z" className="premium-tier tier-fourth" />
+          <path d="M222 580 Q450 705 678 580 L705 615 Q450 755 195 615 Z" className="premium-tier tier-fifth" />
+          <text x="450" y="581" className="premium-label gallery-label">PRESIDENT GALLERY</text>
+          <text x="450" y="623" className="premium-label">PRESIDENTIAL SUITES 4TH FLOOR</text>
+          <text x="450" y="666" className="premium-label">PREMIUM SUITES 5TH FLOOR</text>
+        </g>
+        {[[305,503,"G1","gate-green"],[353,524,"G3",""],[548,524,"G6",""],[601,503,"G8","gate-red"]].map(([x,y,text,className]) => <g key={String(text)} className="gate-marker"><rect x={Number(x)-15} y={Number(y)-12} width="30" height="24" className={`gate ${className}`} /><text x={x} y={Number(y)+5} className="gate-label">{text}</text></g>)}
       </g>
     </svg>
   </div>;

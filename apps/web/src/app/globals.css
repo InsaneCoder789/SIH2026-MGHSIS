@@ -101,9 +101,13 @@ button { color: inherit; font: inherit; cursor: pointer; }
 .pitch { fill: #d8cb79; stroke: #baa64c; stroke-width: 1; }
 .crease { stroke: rgba(245,245,210,.72); stroke-width: 1.2; }
 .direction { fill: #08140d; font-size: 14px; font-weight: 800; text-anchor: middle; }
-.premium-shell { fill: #11171c; stroke: #59636a; stroke-width: 1.2; }
-.premium-divider { fill: none; stroke: #4b555c; stroke-width: 1; }
+.premium-tier { stroke: #59636a; stroke-width: 1.2; }
+.tier-gallery { fill: #171c21; }
+.tier-fourth { fill: #14191e; }
+.tier-fifth { fill: #11161a; }
 .premium-label { fill: #d5d7d9; font-size: 16px; font-weight: 700; text-anchor: middle; }
+.gallery-label { font-size: 17px; }
+.gate-marker { filter: drop-shadow(0 2px 2px rgba(0,0,0,.45)); }
 .gate { fill: #30383d; stroke: #879197; stroke-width: .8; }
 .gate-green { fill: #305f3c; }.gate-red { fill: #bd3935; }
 .gate-label { fill: #edf1f2; font-size: 12px; text-anchor: middle; }
