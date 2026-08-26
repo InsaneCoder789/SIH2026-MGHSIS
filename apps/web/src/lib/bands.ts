@@ -10,6 +10,7 @@ export type SafetyBand = {
   eventId: string;
   eventName: string;
   zone: string;
+  segment: number;
   status: BandStatus;
   hr: number;
   spo2: number;
@@ -37,6 +38,13 @@ export type SafetyBand = {
 };
 
 export const BAND_ZONES = ["M", "N", "P", "Q", "R", "J", "K", "C", "D", "E", "F", "G", "H", "B", "SPW", "SPC", "SPE"] as const;
+export const DEMO_BAND_COUNT = 1200;
+
+export const ZONE_SEGMENT_COUNTS: Record<(typeof BAND_ZONES)[number], number> = {
+  M: 6, N: 7, P: 6, Q: 6, R: 6, J: 6, K: 5,
+  C: 4, D: 6, E: 6, F: 6, G: 5, H: 5, B: 4,
+  SPW: 3, SPC: 4, SPE: 3,
+};
 
 const zoneGeometry: Record<string, { start: number; end: number; inner: number; outer: number }> = {
   M: { start: 310, end: 352, inner: 256, outer: 334 }, N: { start: 352, end: 392, inner: 256, outer: 334 },
@@ -55,9 +63,12 @@ function seeded(id: number, salt: number) {
   return value - Math.floor(value);
 }
 
-function dotFor(id: number, zone: string) {
+function dotFor(id: number, zone: (typeof BAND_ZONES)[number], segment: number) {
   const geometry = zoneGeometry[zone];
-  const angle = geometry.start + 2 + seeded(id, 1) * (geometry.end - geometry.start - 4);
+  const segmentCount = ZONE_SEGMENT_COUNTS[zone];
+  const segmentWidth = (geometry.end - geometry.start) / segmentCount;
+  const segmentStart = geometry.start + segment * segmentWidth;
+  const angle = segmentStart + 0.8 + seeded(id, 1) * Math.max(0.5, segmentWidth - 1.6);
   const radius = geometry.inner + 6 + seeded(id, 2) * (geometry.outer - geometry.inner - 12);
   const radians = ((angle - 90) * Math.PI) / 180;
   return {
@@ -78,14 +89,16 @@ function statusFor(connectivity: BandConnectivity, riskLevel: HumanRiskLevel, so
   return "NORMAL";
 }
 
-export function generateDemoBands(count = 300): SafetyBand[] {
+export function generateDemoBands(count = DEMO_BAND_COUNT): SafetyBand[] {
   return Array.from({ length: count }, (_, index) => {
     const id = index + 1;
-    const zone = BAND_ZONES[(id * 7 + Math.floor(id / 11)) % BAND_ZONES.length];
+    const zone = BAND_ZONES[index % BAND_ZONES.length];
+    const zoneSequence = Math.floor(index / BAND_ZONES.length);
+    const segment = zoneSequence % ZONE_SEGMENT_COUNTS[zone];
     const isOffline = id % 97 === 0 || id === 118 || id === 244;
-    const sos = id === 7 || id === 163 || id === 289;
-    const fallDetected = id === 42 || id === 187 || id === 276;
-    const immobile = fallDetected || id === 84 || id === 231;
+    const sos = id === 7 || id % 173 === 0;
+    const fallDetected = id === 42 || id % 149 === 0;
+    const immobile = fallDetected || id === 84 || id === 231 || id % 211 === 0;
     const elevated = id % 37 === 0 || id === 55 || id === 219;
     const hr = sos ? 138 : fallDetected ? 132 : elevated ? 116 : 68 + Math.round(seeded(id, 4) * 34);
     const spo2 = fallDetected ? 88 : sos ? 91 : elevated ? 94 : 96 + Math.round(seeded(id, 5) * 3);
@@ -97,7 +110,7 @@ export function generateDemoBands(count = 300): SafetyBand[] {
     const motionState: MotionState = immobile ? "IMMOBILE" : id % 5 === 0 ? "STATIONARY" : id % 2 === 0 ? "WALKING" : "ACTIVE";
     const timestamp = `2026-08-26T20:${String(34 - (id % 5)).padStart(2, "0")}:${String(10 + (id % 49)).padStart(2, "0")}+05:30`;
     const risk = calculateHumanRisk({ hr, spo2, fallDetected, immobile, sos, persistenceMinutes, signalQuality, connectivityReliability }, timestamp);
-    const dot = dotFor(id, zone);
+    const dot = dotFor(id, zone, segment);
 
     return {
       id,
@@ -105,6 +118,7 @@ export function generateDemoBands(count = 300): SafetyBand[] {
       eventId: "gt-vs-dc-ipl-2025",
       eventName: "GT vs DC - IPL 2025",
       zone,
+      segment: segment + 1,
       status: statusFor(connectivity, risk.level, sos),
       hr,
       spo2,
@@ -133,7 +147,7 @@ export function generateDemoBands(count = 300): SafetyBand[] {
   });
 }
 
-export const DEMO_BANDS = generateDemoBands(300);
+export const DEMO_BANDS = generateDemoBands();
 
 export function getBandById(id: number | string) {
   const parsed = typeof id === "string" ? Number(id.replace(/^WB-/i, "")) : id;

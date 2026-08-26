@@ -1,0 +1,39 @@
+{
+  "dataset_version": "crowd-risk-synthetic-v1",
+  "rows": 100000,
+  "seed": 26206,
+  "features": [
+    "event_type_code",
+    "area_m2",
+    "current_count",
+    "safe_capacity",
+    "density_per_m2",
+    "capacity_utilization",
+    "inflow_per_min",
+    "outflow_per_min",
+    "accumulation_per_min",
+    "average_speed_mps",
+    "speed_drop_ratio",
+    "dwell_time_min",
+    "route_width_m",
+    "exit_count",
+    "elderly_share",
+    "child_share",
+    "mobility_limited_share",
+    "heat_index_c",
+    "fall_cluster_5m",
+    "sos_cluster_5m",
+    "cctv_confidence",
+    "gateway_health"
+  ],
+  "target": "risk_class",
+  "class_distribution": {
+    "LOW": 44520,
+    "MODERATE": 31358,
+    "HIGH": 18400,
+    "CRITICAL": 5722
+  },
+  "sha256": "bd547f6c4a9630251cb918844d08d743c62b4380978efc1fb113b87b6235fd78",
+  "synthetic_only": true,
+  "intended_use": "Software pipeline development and demonstration; not real-world safety certification."
+}

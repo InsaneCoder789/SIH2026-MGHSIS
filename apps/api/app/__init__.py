@@ -1,0 +1,2 @@
+"""MGHSIS FastAPI application."""
+

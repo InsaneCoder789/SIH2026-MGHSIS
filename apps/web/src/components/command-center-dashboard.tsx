@@ -1,13 +1,13 @@
 "use client";
 
-import Link from "next/link";
 import {
-  Activity, AlertTriangle, CloudSun, Construction, Crosshair, Hand,
-  Eye, EyeOff, HeartPulse, ListFilter, LocateFixed, LockKeyhole, Minus,
-  MousePointer2, Plus, Radio, RotateCcw, Search, ShieldCheck, Siren, Users,
-  UsersRound, Watch, Wind,
+  Activity, AlertTriangle, CloudSun, Construction, Crosshair,
+  Hand, HeartPulse, ListFilter, LocateFixed, LockKeyhole, Minus, MousePointer2,
+  Plus, Radio, RotateCcw, ShieldCheck, Siren, Users, UsersRound, Wind,
 } from "lucide-react";
 import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { useDemoOperations } from "@/components/demo-operations-context";
+import { OperationsHeader } from "@/components/operations-header";
 import { DEMO_BANDS, type SafetyBand } from "@/lib/bands";
 import {
   getDigitalTwinSnapshot, levelFor, scenarioNotes,
@@ -115,7 +115,6 @@ function CommandHeader({ scenario }: { scenario: Scenario }) {
   const authenticated = scenario === "gateway" ? 36_612 : scenario === "congestion" ? 38_569 : 38_247;
   const observed = scenario === "breach" ? 42_402 : scenario === "congestion" ? 42_378 : 41_892;
   return <header className="command-header">
-    <div className="brand-lockup"><ShieldCheck size={39} /><strong>MGHSIS</strong><span>Mass-Gathering Human<br />Safety Intelligence System</span></div>
     <HeaderMetric label="Event"><span>GT vs DC - IPL 2025</span><i className="live-dot" /><small>LIVE</small></HeaderMetric>
     <HeaderMetric label="Mode" accent="teal">Cricket Stadium</HeaderMetric>
     <HeaderMetric label="Authenticated"><Users size={19} /> {authenticated.toLocaleString()}</HeaderMetric>
@@ -154,12 +153,13 @@ function RiskLegend() {
   </section>;
 }
 
-function BowlSector({ sector, zone, selected, onSelect }: { sector: VisualSector; zone: Zone; selected: boolean; onSelect: (id: string) => void }) {
+function BowlSector({ sector, zone, selected, heatmapVisible, onSelect }: { sector: VisualSector; zone: Zone; selected: boolean; heatmapVisible: boolean; onSelect: (id: string) => void }) {
   const level = levelFor(Math.max(zone.crowdRisk, zone.integrityRisk));
   const radii = sector.ring === "outer" ? [250, 343] : [182, 246];
   const mid = (sector.start + sector.end) / 2;
   const label = polar(450, 330, (radii[0] + radii[1]) / 2, mid);
-  const fill = level === "critical" ? riskColors.critical : sector.color;
+  const neutralFill = sector.ring === "outer" ? "#5c99ad" : sector.ring === "premium" ? "#d7d9d4" : "#d9dbd7";
+  const fill = heatmapVisible ? level === "critical" ? riskColors.critical : sector.color : neutralFill;
   return <g className={`bowl-sector ${selected ? "selected" : ""}`} onClick={() => onSelect(sector.zoneId)}>
     {Array.from({ length: sector.divisions }, (_, index) => {
       const size = (sector.end - sector.start) / sector.divisions;
@@ -180,7 +180,7 @@ function BowlSector({ sector, zone, selected, onSelect }: { sector: VisualSector
   </g>;
 }
 
-function StadiumTwin({ zones, selectedZone, onSelect, zoom, bands, selectedBand, onSelectBand }: {
+export function StadiumTwin({ zones, selectedZone, onSelect, zoom, bands, selectedBand, onSelectBand, showHeatmap, showGates, showCameras }: {
   zones: Zone[];
   selectedZone: string;
   onSelect: (id: string) => void;
@@ -188,8 +188,12 @@ function StadiumTwin({ zones, selectedZone, onSelect, zoom, bands, selectedBand,
   bands: SafetyBand[];
   selectedBand: number | null;
   onSelectBand: (id: number) => void;
+  showHeatmap: boolean;
+  showGates: boolean;
+  showCameras: boolean;
 }) {
   const sectionTicks = useMemo(() => Array.from({ length: 52 }, (_, index) => index * (360 / 52)), []);
+  const renderedBands = useMemo(() => bands.toSorted((a, b) => a.riskScore - b.riskScore || a.id - b.id), [bands]);
   return <div className="stadium-stage" style={{ "--stadium-zoom": zoom } as CSSProperties}>
     <svg viewBox="0 0 900 690" role="img" aria-label="Interactive cricket stadium digital twin risk heatmap">
       <defs>
@@ -204,7 +208,7 @@ function StadiumTwin({ zones, selectedZone, onSelect, zoom, bands, selectedBand,
         <g transform="translate(0 75.9) scale(1 .77)">
           {visualSectors.map((sector) => {
             const zone = zones.find((item) => item.id === sector.zoneId) ?? zones[0];
-            return <BowlSector key={sector.id} sector={sector} zone={zone} selected={selectedZone === sector.zoneId} onSelect={onSelect} />;
+            return <BowlSector key={sector.id} sector={sector} zone={zone} selected={selectedZone === sector.zoneId} heatmapVisible={showHeatmap} onSelect={onSelect} />;
           })}
           {Array.from({ length: 8 }, (_, index) => {
             const start = 128 + index * 13;
@@ -228,7 +232,7 @@ function StadiumTwin({ zones, selectedZone, onSelect, zoom, bands, selectedBand,
             {[382, 426].map((radius) => <path key={radius} d={arcPath(450, 330, radius - 0.5, radius + 0.5, 128, 232, 0)} className="premium-tier-divider" />)}
           </g>
           <g className="band-map-layer" aria-label={`${bands.length} safety bands visible`}>
-            {bands.map((band) => <g key={band.id} aria-label={`${band.code}, ${band.status}, risk ${band.riskScore}`} onClick={(event) => { event.stopPropagation(); onSelectBand(band.id); }}>
+            {renderedBands.map((band) => <g key={band.id} aria-label={`${band.code}, ${band.status}, risk ${band.riskScore}`} onClick={(event) => { event.stopPropagation(); onSelectBand(band.id); }}>
               <circle
                 cx={band.dotPositionX}
                 cy={band.dotPositionY}
@@ -248,46 +252,20 @@ function StadiumTwin({ zones, selectedZone, onSelect, zoom, bands, selectedBand,
           <text x="450" y="649" className="premium-label">PRESIDENTIAL SUITES 4TH FLOOR</text>
           <text x="450" y="681" className="premium-label">PREMIUM SUITES 5TH FLOOR</text>
         </g>
-        {[
+        {showGates ? [
           { ...stagePoint(350, 223), text: "G1", className: "gate-green" },
           { ...stagePoint(367, 202), text: "G3", className: "" },
           { ...stagePoint(367, 158), text: "G6", className: "" },
           { ...stagePoint(350, 137), text: "G8", className: "gate-red" },
-        ].map(({ x, y, text, className }) => <g key={text} className="gate-marker"><rect x={x - 15} y={y - 12} width="30" height="24" className={`gate ${className}`} /><text x={x} y={y + 5} className="gate-label">{text}</text></g>)}
+        ].map(({ x, y, text, className }) => <g key={text} className="gate-marker"><rect x={x - 15} y={y - 12} width="30" height="24" className={`gate ${className}`} /><text x={x} y={y + 5} className="gate-label">{text}</text></g>) : null}
+        {showCameras ? [
+          { ...stagePoint(332, 286), text: "C1" }, { ...stagePoint(270, 318), text: "C2" },
+          { ...stagePoint(270, 42), text: "C3" }, { ...stagePoint(332, 74), text: "C4" },
+          { ...stagePoint(232, 112), text: "C5" }, { ...stagePoint(232, 248), text: "C6" },
+        ].map(({ x, y, text }) => <g key={text} className="camera-marker"><rect x={x - 7} y={y - 7} width="14" height="14" transform={`rotate(45 ${x} ${y})`} /><circle cx={x} cy={y} r="2.2" /><text x={x + 10} y={y + 3}>{text}</text></g>) : null}
       </g>
     </svg>
   </div>;
-}
-
-function BandMapControls({ visible, total, showBands, distressOnly, selectedZoneOnly, query, onToggleBands, onToggleDistress, onToggleZone, onQuery }: {
-  visible: number;
-  total: number;
-  showBands: boolean;
-  distressOnly: boolean;
-  selectedZoneOnly: boolean;
-  query: string;
-  onToggleBands: () => void;
-  onToggleDistress: () => void;
-  onToggleZone: () => void;
-  onQuery: (value: string) => void;
-}) {
-  return <section className="twin-band-toolbar" aria-label="Safety band map controls">
-    <header><Watch size={14} /><span>Wearable Bands</span><b>{showBands ? visible : 0}/{total}</b></header>
-    <div>
-      <label><Search size={13} /><input value={query} onChange={(event) => onQuery(event.target.value)} placeholder="WB-001" aria-label="Find safety band" /></label>
-      <button className={showBands ? "active" : ""} onClick={onToggleBands} title={showBands ? "Hide safety bands" : "Show safety bands"}>{showBands ? <Eye size={15} /> : <EyeOff size={15} />}</button>
-      <button className={distressOnly ? "active danger" : ""} onClick={onToggleDistress} title="Show distressed bands only"><Siren size={15} /></button>
-      <button className={selectedZoneOnly ? "active" : ""} onClick={onToggleZone} title="Limit bands to selected zone"><LocateFixed size={15} /></button>
-    </div>
-  </section>;
-}
-
-function BandMapSelection({ band }: { band: SafetyBand }) {
-  return <aside className={`band-map-selection ${band.status.toLowerCase()}`}>
-    <i /><div><span>Selected Band</span><strong>{band.code}</strong><small>Zone {band.zone} / {band.status}</small></div>
-    <div><span>Risk</span><strong>{band.riskScore}</strong><small>{band.hr} BPM / SpO2 {band.spo2}%</small></div>
-    <Link href={`/bands/${band.id}`}>Open record</Link>
-  </aside>;
 }
 
 function AlertPanel() {
@@ -326,33 +304,17 @@ function ScenarioPanel({ scenario, onScenario }: { scenario: Scenario; onScenari
 }
 
 export function CommandCenterDashboard() {
-  const [scenario, setScenario] = useState<Scenario>("normal");
+  const { scenario, activateScenario } = useDemoOperations();
   const [selectedZone, setSelectedZone] = useState("G");
   const [zoom, setZoom] = useState(1);
-  const [showBands, setShowBands] = useState(true);
-  const [distressOnly, setDistressOnly] = useState(false);
-  const [selectedZoneOnly, setSelectedZoneOnly] = useState(false);
-  const [bandQuery, setBandQuery] = useState("");
   const [selectedBandId, setSelectedBandId] = useState<number | null>(null);
   const { zones } = getDigitalTwinSnapshot(scenario);
   const selected = zones.find((zone) => zone.id === selectedZone) ?? zones[0];
   const capacity = scenario === "normal" ? 62 : scenario === "congestion" ? 67 : 64;
-  const visibleBands = useMemo(() => {
-    const normalized = bandQuery.trim().toLowerCase();
-    return DEMO_BANDS.filter((band) => {
-      if (normalized && !band.code.toLowerCase().includes(normalized) && !String(band.id).includes(normalized)) return false;
-      if (selectedZoneOnly && band.zone !== selectedZone) return false;
-      if (distressOnly && band.status !== "DISTRESSED" && band.status !== "SOS") return false;
-      return true;
-    });
-  }, [bandQuery, distressOnly, selectedZone, selectedZoneOnly]);
-  const selectedBand = selectedBandId === null ? null : DEMO_BANDS.find((band) => band.id === selectedBandId) ?? null;
-  return <main className="command-center"><CommandHeader scenario={scenario} /><div className="operations-grid">
+  return <main className="command-center"><OperationsHeader section="Command Centre" /><CommandHeader scenario={scenario} /><div className="operations-grid">
     <section className="twin-workspace" id="digital-twin"><StatusOverlay capacity={capacity} scenario={scenario} /><MapTools zoom={zoom} setZoom={setZoom} /><RiskLegend />
-      <BandMapControls visible={visibleBands.length} total={DEMO_BANDS.length} showBands={showBands} distressOnly={distressOnly} selectedZoneOnly={selectedZoneOnly} query={bandQuery} onToggleBands={() => setShowBands((value) => !value)} onToggleDistress={() => setDistressOnly((value) => !value)} onToggleZone={() => setSelectedZoneOnly((value) => !value)} onQuery={setBandQuery} />
-      {selectedBand ? <BandMapSelection band={selectedBand} /> : null}
-      <StadiumTwin zones={zones} selectedZone={selected.id} onSelect={setSelectedZone} zoom={zoom} bands={showBands ? visibleBands : []} selectedBand={selectedBandId} onSelectBand={setSelectedBandId} />
+      <StadiumTwin zones={zones} selectedZone={selected.id} onSelect={(zone) => { setSelectedZone(zone); setSelectedBandId(null); }} zoom={zoom} bands={DEMO_BANDS} selectedBand={selectedBandId} onSelectBand={(bandId) => { const band = DEMO_BANDS.find((item) => item.id === bandId); setSelectedBandId(bandId); if (band) setSelectedZone(band.zone); }} showHeatmap showGates showCameras />
     </section>
-    <AlertPanel /><KeyMetrics zones={zones} selectedZone={selected} /><EventTimeline /><ScenarioPanel scenario={scenario} onScenario={setScenario} />
+    <AlertPanel /><KeyMetrics zones={zones} selectedZone={selected} /><EventTimeline /><ScenarioPanel scenario={scenario} onScenario={activateScenario} />
   </div></main>;
 }

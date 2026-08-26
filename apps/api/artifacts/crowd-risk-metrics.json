@@ -1,0 +1,69 @@
+{
+  "evaluated_at": "2026-08-26T18:12:19.534553+00:00",
+  "dataset_version": "crowd-risk-synthetic-v1",
+  "seed": 26206,
+  "total_rows": 100000,
+  "training_rows": 80000,
+  "testing_rows": 20000,
+  "accuracy": 0.8078,
+  "macro_f1": 0.7569,
+  "weighted_f1": 0.8104,
+  "multiclass_log_loss": 0.4316,
+  "per_class": {
+    "LOW": {
+      "precision": 0.9259,
+      "recall": 0.8844,
+      "f1": 0.9047,
+      "support": 8904
+    },
+    "MODERATE": {
+      "precision": 0.768,
+      "recall": 0.7725,
+      "f1": 0.7702,
+      "support": 6272
+    },
+    "HIGH": {
+      "precision": 0.7102,
+      "recall": 0.6891,
+      "f1": 0.6995,
+      "support": 3680
+    },
+    "CRITICAL": {
+      "precision": 0.5579,
+      "recall": 0.7876,
+      "f1": 0.6531,
+      "support": 1144
+    }
+  },
+  "confusion_matrix": [
+    [
+      7875,
+      1029,
+      0,
+      0
+    ],
+    [
+      630,
+      4845,
+      793,
+      4
+    ],
+    [
+      0,
+      434,
+      2536,
+      710
+    ],
+    [
+      0,
+      1,
+      242,
+      901
+    ]
+  ],
+  "limitations": [
+    "All samples and labels are synthetic.",
+    "Holdout performance measures recovery of the synthetic generator, not real-event safety outcomes.",
+    "A field pilot, sensor calibration, drift monitoring and independent safety review are required before operational deployment."
+  ]
+}

@@ -1,10 +1,13 @@
 import Link from "next/link";
-import { Activity, Command, RadioTower, ShieldCheck, Watch } from "lucide-react";
+import { Activity, Command, Map, RadioTower, ShieldCheck, Siren, Watch, Workflow } from "lucide-react";
 
 const navigation = [
   { href: "/", label: "Overview", icon: Command },
   { href: "/command-center", label: "Command Centre", icon: RadioTower },
+  { href: "/digital-twin", label: "Digital Twin", icon: Map },
   { href: "/bands", label: "Band Registry", icon: Watch },
+  { href: "/alerts", label: "Alerts", icon: Siren },
+  { href: "/interventions", label: "Interventions", icon: Workflow },
 ];
 
 export function OperationsHeader({ section }: { section: string }) {

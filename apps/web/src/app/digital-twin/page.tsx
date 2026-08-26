@@ -1,5 +1,5 @@
 import { DigitalTwinOperations } from "@/components/digital-twin-operations";
 
-export default function EventDigitalTwinPage() {
+export default function DigitalTwinPage() {
   return <DigitalTwinOperations />;
 }

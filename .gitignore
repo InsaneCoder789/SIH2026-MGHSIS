@@ -12,3 +12,5 @@ dist/
 coverage/
 *.log
 *.pyc
+apps/api/data/generated/*.csv.gz
+apps/api/data/generated/*.csv

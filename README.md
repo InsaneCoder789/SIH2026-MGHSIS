@@ -9,12 +9,12 @@ It fuses simulated Smart Safety Band telemetry, CCTV crowd observations, gate/ac
 This repository has been bootstrapped from `MASTER.md` and includes:
 
 - `apps/web`: Next.js operations portal, command centre, interactive cricket stadium Digital Twin, Band Registry, and Band Detail workflows.
-- `apps/api`: FastAPI skeleton with health endpoint.
+- `apps/api`: FastAPI core with persisted onboard crowd-risk ML inference, evaluation metrics, and hardware-ready observation ingestion.
 - `services/*`: simulator and analytics service placeholders for the ordered roadmap.
 - `packages/*`, `infra/*`, `docs/*`: monorepo structure from the source-of-truth document.
 - `docker-compose.yml`: local PostgreSQL, Redis, API, and web service wiring.
 
-The UI uses the uploaded cricket stadium seating reference to model block-level heatmap zones, 300 deterministic Smart Safety Bands, and explainable demo risk. It does not claim medical diagnosis, facial recognition, exact GPS tracking, or completed hardware integration.
+The UI uses the uploaded cricket stadium seating reference to model block-level heatmap zones, 1,200 deterministic Smart Safety Bands distributed across every visual stadium segment, and explainable demo risk. The backend trains and serves a crowd-risk classifier from a reproducible 100,000-row synthetic corpus (80,000 train / 20,000 holdout). It does not claim medical diagnosis, facial recognition, exact GPS tracking, or completed physical hardware integration.
 
 ## Quick Start
 
@@ -27,9 +27,18 @@ Open `http://localhost:3000`. The main routes are:
 
 - `/`: operations portal and module overview
 - `/command-center`: live stadium Digital Twin and scenario controls
+- `/digital-twin`: dedicated stadium twin with live layers, zone segments, band inspection, and real-time status rail
 - `/bands`: searchable event-scoped Band Registry
 - `/bands/:id`: telemetry and explainable Human Risk detail
+- `/alerts`: operator-controlled alert lifecycle
+- `/interventions`: authorization and post-intervention verification
+- `/analytics`: onboard ML connection, holdout metrics, zone predictions, and explainable trends
+- `/cctv`, `/scenario-lab`, `/replay`, `/system-health`, `/settings`: supporting operations modules
 - `/api/bands` and `/api/bands/:id`: deterministic demo data endpoints
+- `/api/v1/ml/crowd-risk/status`: model version, split, accuracy, macro F1, and per-class metrics
+- `/api/v1/ml/crowd-risk/predict`: single zone inference endpoint
+- `/api/v1/ml/crowd-risk/demo-zones`: inference for every demo stadium zone
+- `/api/v1/hardware/observations`: ordered CCTV, BLE gateway, RFID, manual, or simulator observations
 
 ## Frontend Commands
 
@@ -54,7 +63,7 @@ Recommended local ports from `MASTER.md`:
 
 ## Demo Scenarios
 
-The current command centre includes deterministic frontend scenario controls and a live 300-band map layer:
+The current command centre includes deterministic frontend scenario controls and a live 1,200-band map layer:
 
 - Human distress in a stadium block
 - Crowd congestion
@@ -65,7 +74,7 @@ The current command centre includes deterministic frontend scenario controls and
 - Search, hide, distress-only, and selected-zone wristband controls
 - Click-through from a map dot to the corresponding Band Detail record
 
-Future phases will connect these controls to FastAPI, Redis/WebSockets, and the simulators so verification derives from live simulated state.
+The Analytics module connects to FastAPI when it is running and clearly reports when the deterministic frontend fallback is active. The next backend phase connects these contracts to Redis/WebSockets, persisted events, and simulators so verification derives from live simulated state.
 
 ## Repository Structure
 
@@ -92,3 +101,14 @@ docs                     Product and design docs
 - Population Integrity Risk
 
 Every new feature should strengthen one of those engines, response coordination, or intervention verification.
+
+## Onboard ML
+
+The first model is a `HistGradientBoostingClassifier` trained by `apps/api/app/ml/train.py`. The generated dataset is intentionally synthetic and includes spatial, flow, movement, route, composition, heat, fall/SOS, CCTV confidence, and gateway health features. The model artifact and metrics are stored under `apps/api/artifacts/`; the generated 100,000-row compressed CSV is ignored because it can be recreated exactly from the seed and manifest.
+
+```bash
+PYTHONPATH=apps/api .venv/bin/python -m app.ml.train
+PYTHONPATH=apps/api .venv/bin/pytest apps/api/tests -q
+```
+
+The classifier is advisory decision support. Its holdout metrics are software-pipeline evidence only, not field safety validation. Read `docs/ML.md` and `docs/HardwareIntegration.md` before connecting real sensors.

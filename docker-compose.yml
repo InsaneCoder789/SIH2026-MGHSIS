@@ -8,7 +8,8 @@ services:
       NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
       NEXT_PUBLIC_WS_BASE_URL: ws://localhost:8000
     depends_on:
-      - api
+      api:
+        condition: service_healthy
 
   api:
     build:
@@ -21,6 +22,11 @@ services:
     depends_on:
       - postgres
       - redis
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
 
   postgres:
     image: postgres:16-alpine

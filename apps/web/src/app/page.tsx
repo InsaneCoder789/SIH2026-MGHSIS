@@ -9,15 +9,16 @@ import { DEMO_BANDS, summarizeBands } from "@/lib/bands";
 
 const modules = [
   { title: "Command Centre", description: "Live venue Digital Twin, zone heat, alerts and interventions.", icon: RadioTower, metric: "12 active alerts", href: "/command-center", tone: "teal" },
-  { title: "Band Registry", description: "Trace every registered Smart Safety Band and its risk state.", icon: Watch, metric: "300 registered", href: "/bands", tone: "blue" },
-  { title: "Live Alerts & Incidents", description: "Triage Human, Crowd and Population Integrity alerts.", icon: Siren, metric: "3 critical", href: "/command-center#alerts", tone: "red" },
-  { title: "Risk Analytics", description: "Compare risk history, zone trends and response effectiveness.", icon: BarChart3, metric: "7 zones elevated", href: "/command-center#metrics", tone: "orange" },
-  { title: "CCTV & Zone Monitoring", description: "Inspect mapped feeds, observed counts and confidence.", icon: Camera, metric: "24 / 26 online", href: "/command-center", tone: "green" },
-  { title: "Scenario Lab", description: "Trigger deterministic event conditions for SIH demonstration.", icon: FlaskConical, metric: "5 scenarios", href: "/command-center#scenarios", tone: "yellow" },
-  { title: "Intervention Console", description: "Review, authorize and verify recommended field actions.", icon: Workflow, metric: "4 pending", href: "/command-center#scenarios", tone: "teal" },
-  { title: "Event Timeline / Replay", description: "Follow risk spikes, alerts and operator actions over time.", icon: Clock3, metric: "168 events", href: "/command-center#timeline", tone: "blue" },
-  { title: "System Health", description: "Gateway, camera, API and real-time stream diagnostics.", icon: Activity, metric: "97.8% healthy", href: "/#system-health", tone: "green" },
-  { title: "Settings / Configuration", description: "Risk weights, event thresholds and deployment mode.", icon: Settings, metric: "Cricket mode", href: "/#configuration", tone: "neutral" },
+  { title: "Dedicated Digital Twin", description: "Full venue view with 1,200 live bands, segment heat and zone intelligence.", icon: RadioTower, metric: `${DEMO_BANDS.length.toLocaleString()} live dots`, href: "/digital-twin", tone: "teal" },
+  { title: "Band Registry", description: "Trace every registered Smart Safety Band and its risk state.", icon: Watch, metric: `${DEMO_BANDS.length.toLocaleString()} registered`, href: "/bands", tone: "blue" },
+  { title: "Live Alerts & Incidents", description: "Triage Human, Crowd and Population Integrity alerts.", icon: Siren, metric: "3 critical", href: "/alerts", tone: "red" },
+  { title: "Risk Analytics", description: "Compare risk history, zone trends and response effectiveness.", icon: BarChart3, metric: "7 zones elevated", href: "/analytics", tone: "orange" },
+  { title: "CCTV & Zone Monitoring", description: "Inspect mapped feeds, observed counts and confidence.", icon: Camera, metric: "10 / 12 online", href: "/cctv", tone: "green" },
+  { title: "Scenario Lab", description: "Trigger deterministic event conditions for SIH demonstration.", icon: FlaskConical, metric: "6 scenarios", href: "/scenario-lab", tone: "yellow" },
+  { title: "Intervention Console", description: "Review, authorize and verify recommended field actions.", icon: Workflow, metric: "5 recommendations", href: "/interventions", tone: "teal" },
+  { title: "Event Timeline / Replay", description: "Follow risk spikes, alerts and operator actions over time.", icon: Clock3, metric: "12+ audit events", href: "/replay", tone: "blue" },
+  { title: "System Health", description: "Gateway, camera, API and real-time stream diagnostics.", icon: Activity, metric: "97.8% healthy", href: "/system-health", tone: "green" },
+  { title: "Settings / Configuration", description: "Risk weights, event thresholds and deployment mode.", icon: Settings, metric: "Cricket mode", href: "/settings", tone: "neutral" },
 ] as const;
 
 const incidents = [
@@ -53,7 +54,7 @@ export default function HomePage() {
 
       <div className="portal-layout">
         <section className="module-section">
-          <header><div><p className="eyebrow">Software Modules</p><h2>Operational workspace</h2></div><span>10 modules</span></header>
+          <header><div><p className="eyebrow">Software Modules</p><h2>Operational workspace</h2></div><span>{modules.length} modules</span></header>
           <div className="module-grid">
             {modules.map(({ title, description, icon: Icon, metric, href, tone }) => (
               <Link href={href} key={title} className={`module-card ${tone}`}>
@@ -66,7 +67,7 @@ export default function HomePage() {
 
         <aside className="portal-rail">
           <section className="incident-stack">
-            <header><div><p className="eyebrow">Priority Queue</p><h2>Top incidents</h2></div><Link href="/command-center#alerts">View all</Link></header>
+            <header><div><p className="eyebrow">Priority Queue</p><h2>Top incidents</h2></div><Link href="/alerts">View all</Link></header>
             {incidents.map((incident) => <article key={incident.time}><time>{incident.time}</time><div><strong>{incident.title}</strong><span>{incident.type} · {incident.location}</span></div><b className={incident.severity.toLowerCase()}>{incident.severity}</b></article>)}
           </section>
           <section className="band-watchlist">
