@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 const API_BASE_URL = process.env.MGHSIS_API_BASE_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000";
 
 async function proxy(path: string, init?: RequestInit) {
-  const response = await fetch(`${API_BASE_URL}/api/v1/simulation${path}`, { ...init, cache: "no-store", signal: AbortSignal.timeout(1_500) });
+  const response = await fetch(`${API_BASE_URL}/api/v1/simulation${path}`, { ...init, cache: "no-store", signal: AbortSignal.timeout(5_000) });
   const payload = await response.json();
   return NextResponse.json(payload, { status: response.status });
 }

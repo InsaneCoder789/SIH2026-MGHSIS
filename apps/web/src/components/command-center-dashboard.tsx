@@ -3,9 +3,9 @@
 import {
   Activity, AlertTriangle, CloudSun, Construction, Crosshair,
   Hand, HeartPulse, ListFilter, LocateFixed, LockKeyhole, Minus, MousePointer2,
-  Plus, Radio, RotateCcw, ShieldCheck, Siren, Users, UsersRound, Wind,
+  Pause, Play, Plus, Radio, RotateCcw, ShieldCheck, Siren, Users, UsersRound, Wind,
 } from "lucide-react";
-import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { useDemoOperations } from "@/components/demo-operations-context";
 import { OperationsHeader } from "@/components/operations-header";
 import { DEMO_BANDS, type SafetyBand } from "@/lib/bands";
@@ -303,18 +303,55 @@ function ScenarioPanel({ scenario, onScenario }: { scenario: Scenario; onScenari
   return <section className="scenario-panel" id="scenarios"><h2>Scenario Controls</h2><div className="scenario-grid">{scenarioControls.map(({id,label,icon:Icon,tone}) => <button key={id} className={`${tone} ${scenario === id ? "active" : ""}`} onClick={() => onScenario(id)}><Icon size={31} /><span>{label}</span></button>)}</div><p>{scenarioNotes[scenario]} All actions require authorization.</p></section>;
 }
 
+type TwinVirtualisationState = {
+  scenario: string;
+  running: boolean;
+  tick: number;
+  simulated_time_seconds: number;
+  active_action: { action: string; zone_id: string } | null;
+  aggregate: { peak_score: number; average_score: number; critical_zones: number; high_or_above: number };
+  zones: Array<{ observation: { current_count: number; inflow_per_min: number; outflow_per_min: number; gateway_health: number }; prediction: { zone_id: string; score: number; level: string; trend: string; recommended_actions: string[] } }>;
+};
+
+async function twinSimulationCommand(body: Record<string, string>) {
+  const response = await fetch("/api/simulation", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  if (!response.ok) throw new Error("Virtualisation service unavailable");
+  return response.json() as Promise<TwinVirtualisationState>;
+}
+
+function TwinVirtualisationPanel({ state, onCommand }: { state: TwinVirtualisationState | null; onCommand: (body: Record<string, string>) => void }) {
+  const zones = state?.zones.toSorted((a, b) => b.prediction.score - a.prediction.score).slice(0, 4) ?? [];
+  return <section className="twin-virtualisation-panel"><header><div><p className="eyebrow">Live Scenario Projection</p><h2>{state?.scenario?.replaceAll("_", " ") ?? "Connecting"}</h2></div><span>{state?.running ? "RUNNING" : "PAUSED"}</span></header><div className="virtualisation-summary"><div><small>Virtual tick</small><strong>{state?.tick ?? "--"}</strong></div><div><small>Peak score</small><strong>{state?.aggregate.peak_score.toFixed(1) ?? "--"}</strong></div><div><small>High+</small><strong>{state?.aggregate.high_or_above ?? "--"}</strong></div></div><div className="virtualisation-zones">{zones.map((item) => <article key={item.prediction.zone_id}><div><b>{item.prediction.zone_id}</b><span>{item.prediction.level} / {item.prediction.trend}</span></div><i><em className={item.prediction.level.toLowerCase()} style={{ width: `${Math.min(100, item.prediction.score)}%` }} /></i><strong>{item.prediction.score.toFixed(0)}</strong></article>)}</div><footer><button onClick={() => onCommand({ command: state?.running ? "pause" : "start" })}>{state?.running ? <Pause size={13} /> : <Play size={13} />}{state?.running ? "Pause" : "Run"}</button><button onClick={() => onCommand({ command: "action", action: "REDIRECT_TO_ZONE", zone_id: "G" })}><LocateFixed size={13} />Redirect G</button></footer></section>;
+}
+
 export function CommandCenterDashboard() {
   const { scenario, activateScenario } = useDemoOperations();
   const [selectedZone, setSelectedZone] = useState("G");
   const [zoom, setZoom] = useState(1);
   const [selectedBandId, setSelectedBandId] = useState<number | null>(null);
+  const [twinTab, setTwinTab] = useState<"LIVE" | "VIRTUALISATION">("LIVE");
+  const [simulation, setSimulation] = useState<TwinVirtualisationState | null>(null);
   const { zones } = getDigitalTwinSnapshot(scenario);
   const selected = zones.find((zone) => zone.id === selectedZone) ?? zones[0];
   const capacity = scenario === "normal" ? 62 : scenario === "congestion" ? 67 : 64;
+  useEffect(() => {
+    if (twinTab !== "VIRTUALISATION") return;
+    const load = () => fetch("/api/simulation", { cache: "no-store" }).then((response) => response.ok ? response.json() : Promise.reject()).then((payload: TwinVirtualisationState) => setSimulation(payload)).catch(() => undefined);
+    load();
+    const timer = window.setInterval(load, 1000);
+    return () => window.clearInterval(timer);
+  }, [twinTab]);
+  const virtualZones = useMemo(() => zones.map((zone) => {
+    const live = simulation?.zones.find((item) => item.prediction.zone_id === zone.id);
+    return live ? { ...zone, crowdRisk: live.prediction.score, observed: live.observation.current_count, inflow: live.observation.inflow_per_min, outflow: live.observation.outflow_per_min, gatewayHealth: live.observation.gateway_health } : zone;
+  }), [simulation, zones]);
+  const applyTwinSimulationCommand = (body: Record<string, string>) => { twinSimulationCommand(body).then(setSimulation).catch(() => undefined); };
+  const activateTwinScenario = (next: Scenario) => { activateScenario(next); if (next === "normal") applyTwinSimulationCommand({ command: "reset" }); else applyTwinSimulationCommand({ command: "scenario", scenario: next }); };
   return <main className="command-center"><OperationsHeader section="Command Centre" /><CommandHeader scenario={scenario} /><div className="operations-grid">
-    <section className="twin-workspace" id="digital-twin"><StatusOverlay capacity={capacity} scenario={scenario} /><MapTools zoom={zoom} setZoom={setZoom} /><RiskLegend />
-      <StadiumTwin zones={zones} selectedZone={selected.id} onSelect={(zone) => { setSelectedZone(zone); setSelectedBandId(null); }} zoom={zoom} bands={DEMO_BANDS} selectedBand={selectedBandId} onSelectBand={(bandId) => { const band = DEMO_BANDS.find((item) => item.id === bandId); setSelectedBandId(bandId); if (band) setSelectedZone(band.zone); }} showHeatmap showGates showCameras />
+    <section className="twin-workspace" id="digital-twin"><div className="twin-view-tabs"><button className={twinTab === "LIVE" ? "active" : ""} onClick={() => setTwinTab("LIVE")}><Activity size={13} />Live twin</button><button className={twinTab === "VIRTUALISATION" ? "active" : ""} onClick={() => setTwinTab("VIRTUALISATION")}><Play size={13} />Virtualisation</button></div><StatusOverlay capacity={capacity} scenario={scenario} /><MapTools zoom={zoom} setZoom={setZoom} /><RiskLegend />
+      <StadiumTwin zones={twinTab === "VIRTUALISATION" ? virtualZones : zones} selectedZone={selected.id} onSelect={(zone) => { setSelectedZone(zone); setSelectedBandId(null); }} zoom={zoom} bands={DEMO_BANDS} selectedBand={selectedBandId} onSelectBand={(bandId) => { const band = DEMO_BANDS.find((item) => item.id === bandId); setSelectedBandId(bandId); if (band) setSelectedZone(band.zone); }} showHeatmap showGates showCameras />
+      {twinTab === "VIRTUALISATION" ? <TwinVirtualisationPanel state={simulation} onCommand={applyTwinSimulationCommand} /> : null}
     </section>
-    <AlertPanel /><KeyMetrics zones={zones} selectedZone={selected} /><EventTimeline /><ScenarioPanel scenario={scenario} onScenario={activateScenario} />
+    <AlertPanel /><KeyMetrics zones={twinTab === "VIRTUALISATION" ? virtualZones : zones} selectedZone={selected} /><EventTimeline /><ScenarioPanel scenario={scenario} onScenario={activateTwinScenario} />
   </div></main>;
 }
