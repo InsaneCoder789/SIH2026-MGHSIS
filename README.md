@@ -1,6 +1,6 @@
 # MGHSIS
 
-Mass-Gathering Human Safety Intelligence System is a local-first SIH26206 software prototype for event safety command centres.
+Mass-Gathering Human Safety Intelligence System is a local-first SIH2026 software prototype for event safety command centres.
 
 It fuses simulated Smart Safety Band telemetry, CCTV crowd observations, gate/access counts, a venue Digital Twin, explainable Human Risk, Crowd Risk, Population Integrity Risk, intervention recommendations, and intervention verification.
 
@@ -8,13 +8,13 @@ It fuses simulated Smart Safety Band telemetry, CCTV crowd observations, gate/ac
 
 This repository has been bootstrapped from `MASTER.md` and includes:
 
-- `apps/web`: Next.js command-centre frontend with an interactive cricket stadium Digital Twin slice.
+- `apps/web`: Next.js operations portal, command centre, interactive cricket stadium Digital Twin, Band Registry, and Band Detail workflows.
 - `apps/api`: FastAPI skeleton with health endpoint.
 - `services/*`: simulator and analytics service placeholders for the ordered roadmap.
 - `packages/*`, `infra/*`, `docs/*`: monorepo structure from the source-of-truth document.
 - `docker-compose.yml`: local PostgreSQL, Redis, API, and web service wiring.
 
-The first UI uses the uploaded cricket stadium seating reference to model block-level heatmap zones. It does not claim medical diagnosis, facial recognition, exact GPS tracking, or completed hardware integration.
+The UI uses the uploaded cricket stadium seating reference to model block-level heatmap zones, 300 deterministic Smart Safety Bands, and explainable demo risk. It does not claim medical diagnosis, facial recognition, exact GPS tracking, or completed hardware integration.
 
 ## Quick Start
 
@@ -23,7 +23,13 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:3000`.
+Open `http://localhost:3000`. The main routes are:
+
+- `/`: operations portal and module overview
+- `/command-center`: live stadium Digital Twin and scenario controls
+- `/bands`: searchable event-scoped Band Registry
+- `/bands/:id`: telemetry and explainable Human Risk detail
+- `/api/bands` and `/api/bands/:id`: deterministic demo data endpoints
 
 ## Frontend Commands
 
@@ -48,7 +54,7 @@ Recommended local ports from `MASTER.md`:
 
 ## Demo Scenarios
 
-The current command centre includes deterministic frontend scenario controls:
+The current command centre includes deterministic frontend scenario controls and a live 300-band map layer:
 
 - Human distress in a stadium block
 - Crowd congestion
@@ -56,6 +62,8 @@ The current command centre includes deterministic frontend scenario controls:
 - Gateway degradation
 - Crowd redirect intervention preview
 - Reset to normal event state
+- Search, hide, distress-only, and selected-zone wristband controls
+- Click-through from a map dot to the corresponding Band Detail record
 
 Future phases will connect these controls to FastAPI, Redis/WebSockets, and the simulators so verification derives from live simulated state.
 
