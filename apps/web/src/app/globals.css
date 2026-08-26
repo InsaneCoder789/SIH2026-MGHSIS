@@ -95,6 +95,12 @@ button { color: inherit; font: inherit; cursor: pointer; }
 .block-label { pointer-events: none; fill: #071116; font-size: 15px; font-weight: 800; letter-spacing: 0; }
 .premium-block-label { font-size: 10px; }
 .seat-number { pointer-events: none; fill: rgba(4,16,20,.82); font-size: 8px; font-weight: 700; }
+.service-wedge { fill: #dbddd9; stroke: rgba(65,73,77,.55); stroke-width: .8; }
+.bay-wedge { stroke: rgba(40,48,53,.72); stroke-width: .9; }
+.bay-0 { fill: #bea0ca; }
+.bay-1 { fill: #d2d3cf; }
+.bay-2 { fill: #b9a2c2; }
+.bay-label { pointer-events: none; fill: #20262a; font-size: 7px; font-weight: 700; }
 .field { stroke: #294f27; stroke-width: 4; }
 .field-ring { fill: none; stroke: rgba(28, 74, 29, .35); stroke-width: 1; }
 .neutral-field-mark { fill: rgba(37, 83, 35, .24); stroke: rgba(25, 65, 29, .28); stroke-width: 2; }

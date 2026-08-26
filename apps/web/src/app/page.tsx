@@ -191,6 +191,21 @@ function StadiumTwin({ zones, selectedZone, onSelect, zoom }: { zones: Zone[]; s
             const zone = zones.find((item) => item.id === sector.zoneId) ?? zones[0];
             return <BowlSector key={sector.id} sector={sector} zone={zone} selected={selectedZone === sector.zoneId} onSelect={onSelect} />;
           })}
+          {Array.from({ length: 8 }, (_, index) => {
+            const start = 128 + index * 13;
+            const end = start + 13;
+            return <path key={`service-${index}`} d={arcPath(450, 330, 246, 292, start, end, 0.25)} className="service-wedge" />;
+          })}
+          {Array.from({ length: 8 }, (_, index) => {
+            const start = 128 + index * 13;
+            const end = start + 13;
+            const mid = (start + end) / 2;
+            const label = polar(450, 330, 316, mid);
+            return <g key={`bay-${index}`}>
+              <path d={arcPath(450, 330, 292, 343, start, end, 0.25)} className={`bay-wedge bay-${index % 3}`} />
+              <text x={label.x} y={label.y} textAnchor="middle" dominantBaseline="middle" transform={`rotate(${mid}, ${label.x}, ${label.y})`} className="bay-label">BAY {index + 1}</text>
+            </g>;
+          })}
         </g>
         <ellipse cx="450" cy="330" rx="181" ry="140" fill="url(#turf)" className="field" />
         <ellipse cx="450" cy="330" rx="154" ry="117" className="field-ring" />
@@ -198,14 +213,14 @@ function StadiumTwin({ zones, selectedZone, onSelect, zoom }: { zones: Zone[]; s
         <rect x="440" y="289" width="20" height="82" rx="1" className="pitch" /><line x1="437" y1="299" x2="463" y2="299" className="crease" /><line x1="437" y1="361" x2="463" y2="361" className="crease" />
         {[[450,205,"N"],[560,235,"NE"],[620,334,"E"],[555,432,"SE"],[450,467,"S"],[342,432,"SW"],[280,334,"W"],[340,235,"NW"]].map(([x,y,label]) => <text key={String(label)} x={x} y={y} className="direction">{label}</text>)}
         <g className="premium-tiers">
-          <path d="M280 520 Q450 600 620 520 L650 545 Q450 650 250 545 Z" className="premium-tier tier-gallery" />
-          <path d="M250 545 Q450 650 650 545 L678 580 Q450 705 222 580 Z" className="premium-tier tier-fourth" />
-          <path d="M222 580 Q450 705 678 580 L705 615 Q450 755 195 615 Z" className="premium-tier tier-fifth" />
-          <text x="450" y="581" className="premium-label gallery-label">PRESIDENT GALLERY</text>
-          <text x="450" y="623" className="premium-label">PRESIDENTIAL SUITES 4TH FLOOR</text>
-          <text x="450" y="666" className="premium-label">PREMIUM SUITES 5TH FLOOR</text>
+          <path d="M180 493 Q450 695 720 493 L690 530 Q450 718 210 530 Z" className="premium-tier tier-gallery" />
+          <path d="M210 530 Q450 718 690 530 L720 568 Q450 742 180 568 Z" className="premium-tier tier-fourth" />
+          <path d="M180 568 Q450 742 720 568 L750 606 Q450 765 150 606 Z" className="premium-tier tier-fifth" />
+          <text x="450" y="614" className="premium-label gallery-label">PRESIDENT GALLERY</text>
+          <text x="450" y="649" className="premium-label">PRESIDENTIAL SUITES 4TH FLOOR</text>
+          <text x="450" y="681" className="premium-label">PREMIUM SUITES 5TH FLOOR</text>
         </g>
-        {[[305,503,"G1","gate-green"],[353,524,"G3",""],[548,524,"G6",""],[601,503,"G8","gate-red"]].map(([x,y,text,className]) => <g key={String(text)} className="gate-marker"><rect x={Number(x)-15} y={Number(y)-12} width="30" height="24" className={`gate ${className}`} /><text x={x} y={Number(y)+5} className="gate-label">{text}</text></g>)}
+        {[[302,516,"G1","gate-green"],[355,548,"G3",""],[545,548,"G6",""],[598,516,"G8","gate-red"]].map(([x,y,text,className]) => <g key={String(text)} className="gate-marker"><rect x={Number(x)-15} y={Number(y)-12} width="30" height="24" className={`gate ${className}`} /><text x={x} y={Number(y)+5} className="gate-label">{text}</text></g>)}
       </g>
     </svg>
   </div>;
