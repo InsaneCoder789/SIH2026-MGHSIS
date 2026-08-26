@@ -38,6 +38,38 @@ type MlIntelligenceResponse = {
   fallback?: string;
 };
 
+type SimulationState = {
+  simulation_id: string;
+  scenario: string;
+  running: boolean;
+  tick: number;
+  simulated_time_seconds: number;
+  active_action: { action: string; zone_id: string } | null;
+  aggregate: { peak_score: number; average_score: number; critical_zones: number; high_or_above: number };
+  zones: Array<{ observation: { current_count: number; inflow_per_min: number; outflow_per_min: number }; prediction: { zone_id: string; score: number; level: string; trend: string; recommended_actions: string[] } }>;
+};
+
+async function simulationCommand(body: Record<string, string>) {
+  const response = await fetch("/api/simulation", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  if (!response.ok) throw new Error("Simulation service unavailable");
+  return response.json() as Promise<SimulationState>;
+}
+
+function LiveSimulationPanel() {
+  const [state, setState] = useState<SimulationState | null>(null);
+  const [connected, setConnected] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const load = () => fetch("/api/simulation", { cache: "no-store" }).then((response) => { if (!response.ok) throw new Error("offline"); return response.json(); }).then((payload: SimulationState) => { setState(payload); setConnected(true); }).catch(() => setConnected(false));
+  useEffect(() => { load(); const timer = window.setInterval(load, 1000); return () => window.clearInterval(timer); }, []);
+  const command = async (body: Record<string, string>) => { setBusy(true); try { setState(await simulationCommand(body)); setConnected(true); } catch { setConnected(false); } finally { setBusy(false); } };
+  const highest = state?.zones.toSorted((a, b) => b.prediction.score - a.prediction.score).slice(0, 5) ?? [];
+  return <section className="live-simulation-panel"><header><div><p className="eyebrow">Real-Time Scenario Virtualisation</p><h2>ML event simulator</h2><p>Sensor-like zone observations evolve every 15 simulated seconds and are rescored by the local model.</p></div><span className={`simulation-connection ${connected ? "online" : "offline"}`}><i />{connected ? "API online" : "API offline"}</span></header>
+    <div className="simulation-toolbar"><div><span>Scenario</span><strong>{state?.scenario?.toUpperCase() ?? "CONNECTING"}</strong></div><div><span>Virtual time</span><strong>{state ? `${Math.floor(state.simulated_time_seconds / 60)}m ${state.simulated_time_seconds % 60}s` : "--"}</strong></div><div><span>Tick</span><strong>{state?.tick ?? "--"}</strong></div><button disabled={busy || !connected} onClick={() => command({ command: state?.running ? "pause" : "start" })}>{state?.running ? <Pause size={15} /> : <Play size={15} />}{state?.running ? "Pause" : "Start"}</button><button disabled={busy || !connected} onClick={() => command({ command: "reset" })}><RotateCcw size={15} />Reset</button></div>
+    <div className="simulation-kpis"><article><span>Peak ML score</span><strong>{state?.aggregate.peak_score.toFixed(1) ?? "--"}</strong></article><article><span>Average score</span><strong>{state?.aggregate.average_score.toFixed(1) ?? "--"}</strong></article><article><span>High / critical zones</span><strong>{state?.aggregate.high_or_above ?? "--"}</strong></article><article><span>Critical zones</span><strong>{state?.aggregate.critical_zones ?? "--"}</strong></article></div>
+    <div className="simulation-body"><section><header><div><p className="eyebrow">Live Inference Stream</p><h3>Zone predictions</h3></div><span>{state?.active_action ? `${state.active_action.action.replaceAll("_", " ")} / ${state.active_action.zone_id}` : "No response applied"}</span></header><div className="simulation-zone-list">{highest.map((item) => <article key={item.prediction.zone_id}><b>{item.prediction.zone_id}</b><div><strong>{item.prediction.level}</strong><span>{item.prediction.trend} / {item.observation.current_count.toLocaleString()} observed</span></div><i><em className={item.prediction.level.toLowerCase()} style={{ width: `${Math.min(100, item.prediction.score)}%` }} /></i><strong className="simulation-score">{item.prediction.score.toFixed(1)}</strong></article>)}</div></section><aside><p className="eyebrow">Operator Response</p><h3>Test the feedback loop</h3><p>Apply an action to Block G and observe whether the model sees the pressure recover across subsequent ticks.</p><button disabled={busy || !connected} onClick={() => command({ command: "action", action: "REDIRECT_TO_ZONE", zone_id: "G" })}><Workflow size={15} />Redirect Block G</button><button disabled={busy || !connected} onClick={() => command({ command: "action", action: "OPEN_ALTERNATE_ROUTE", zone_id: "G" })}><ChevronRight size={15} />Open alternate route</button><button disabled={busy || !connected} onClick={() => command({ command: "action", action: "RESTRICT_INFLOW", zone_id: "G" })}><ShieldCheck size={15} />Restrict inflow</button></aside></div>
+  </section>;
+}
+
 function MlIntelligencePanel() {
   const [data, setData] = useState<MlIntelligenceResponse | null>(null);
   const [reload, setReload] = useState(0);
@@ -93,7 +125,7 @@ export function ScenarioLab() {
   return <main className="ops-module-page"><OperationsHeader section="Scenario Lab" /><ModuleTitle eyebrow="Deterministic Demonstration" title="Scenario Lab" description="Activate repeatable safety conditions and carry the resulting state into the Command Centre and Digital Twin." status={active === "normal" ? "Normal event" : `${active} active`} />
     <div className="scenario-lab-layout"><section className="scenario-catalog"><header><p className="eyebrow">Scenario Presets</p><h2>Choose an event condition</h2></header><div>{SCENARIO_CATALOG.map((item,index) => <button key={item.id} className={`${selected.id === item.id ? "selected" : ""} ${active === item.id ? "active" : ""}`} onClick={() => setSelectedId(item.id)}><span>0{index+1}</span><div><strong>{item.title}</strong><p>{item.description}</p><small>{item.effect}</small></div>{active === item.id ? <b><Activity size={12} />Active</b> : <ChevronRight size={15} />}</button>)}</div></section>
       <section className="scenario-preview"><header><div><p className="eyebrow">Scenario Preview</p><h2>{selected.title}</h2></div><FlaskConical size={22} /></header><div className={`scenario-signal ${selected.id}`}><i /><i /><i /><strong>{selected.effect}</strong></div><section><p>{selected.description}</p><dl><div><dt>Affected engine</dt><dd>{selected.id === "distress" ? "Human Risk" : selected.id === "breach" || selected.id === "gateway" ? "Population Integrity" : "Crowd Risk"}</dd></div><div><dt>Data source</dt><dd>Deterministic simulator</dd></div><div><dt>Reset support</dt><dd>Immediate</dd></div><div><dt>Operator control</dt><dd>Required</dd></div></dl></section><footer><button className="scenario-run" onClick={() => activateScenario(selected.id)}><Play size={16} />Activate scenario</button><button onClick={resetEvent}><RotateCcw size={16} />Reset event</button></footer><div className="scenario-links"><Link href="/command-center">Open Command Centre<ChevronRight size={14} /></Link><Link href="/digital-twin">Open dedicated twin<ChevronRight size={14} /></Link></div></section>
-    </div>
+    </div><LiveSimulationPanel />
   </main>;
 }
 

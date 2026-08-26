@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.hardware import router as hardware_router
 from app.api.ml import router as ml_router
+from app.api.simulation import router as simulation_router
 
 app = FastAPI(
     title="MGHSIS Core API",
@@ -19,6 +20,7 @@ app.add_middleware(
 )
 app.include_router(ml_router)
 app.include_router(hardware_router)
+app.include_router(simulation_router)
 
 
 @app.get("/health")

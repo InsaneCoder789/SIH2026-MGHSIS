@@ -14,3 +14,6 @@ Physical bridge roadmap:
 
 The Digital Twin intentionally exposes zone and segment precision only. It is not a GPS or facial-recognition system.
 
+## Virtual commissioning path
+
+Before physical devices are available, the event simulator exercises the same inference contract with scenario-based observations. It models normal flow, congestion, distress, barricade breach, gateway degradation, and redirect response, allowing API latency, model behavior, operator decisions, and recovery verification to be tested together. Hardware adapters should eventually publish observations into the same normalized contract rather than bypassing the ML API.
