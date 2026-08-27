@@ -1,255 +1,281 @@
-# MGHSIS Presentation Model
+# MGHSIS: SIH 2026 Presentation Content
 
-## Presentation Title
+This presentation model follows the supplied **SIH2026 Idea Presentation Format**.
+The final submission must contain a maximum of **six slides, including the title
+slide**. The template's seventh slide is an instruction page and must be deleted
+before submission.
 
-**MGHSIS: Mass-Gathering Human Safety Intelligence System**
+## Presentation Objective
 
-### Presentation Format
-
-- Total slides: 7
-- Suggested duration: 7 to 10 minutes
-- Audience: judges, event-safety stakeholders, technical reviewers, and operations teams
-- Product type: Next.js operations portal with FastAPI backend, Digital Twin, ML inference, and hardware-ready ingestion
+By the end of the presentation, SIH judges should understand that MGHSIS is a
+working, human-controlled crowd-safety intelligence platform combining a venue
+Digital Twin, explainable ML risk analysis, scenario virtualisation, and a
+hardware-ready data interface.
 
 ---
 
-## Slide 1: The Problem
+## Slide 1: TITLE PAGE
 
-### On-slide title
+### Details to place on the slide
 
-**Large Events Are Difficult to Observe in Real Time**
-
-### On-slide content
-
-- Stadiums contain thousands of people moving through different zones simultaneously.
-- Crowd pressure can develop before an incident becomes visually obvious.
-- Human distress, congestion, gate mismatches, and infrastructure failures are often monitored separately.
-- Operators need one shared operational picture to decide quickly and responsibly.
+- **Problem Statement ID:** `[Fill from SIH portal]`
+- **Problem Statement Title:** `[Use the exact SIH portal title]`
+- **Theme:** `[Fill from SIH portal]`
+- **PS Category:** `[Use the registered Software/Hardware category]`
+- **Team ID:** `[Fill from SIH portal]`
+- **Team Name:** `[Use the exact registered team name]`
+- **Idea Title:** **MGHSIS - Mass-Gathering Human Safety Intelligence System**
 
 ### Visual direction
 
-Use a stadium image or a dark stadium command-centre screenshot with highlighted zones, gates, and crowd movement. Keep the visual focused on the scale and complexity of a live event.
+Keep the official SIH title-page layout and logo unchanged. Use only the
+registered portal details and do not place technical explanations on this slide.
 
 ### Speaker notes
 
-At a major event, the challenge is not only counting people. Operators must understand where people are, how quickly they are moving, whether inflow is exceeding outflow, whether exits are available, whether vulnerable groups may need support, and whether the sensing infrastructure is trustworthy. Existing tools can become fragmented dashboards. MGHSIS brings these signals into one operational system.
-
-### Key message
-
-**The problem is fragmented, delayed, and difficult-to-interpret safety information during mass gatherings.**
+MGHSIS is an event-safety intelligence system for stadiums and other mass
+gatherings. It gives operators a live spatial view of crowd conditions, predicts
+emerging risks, explains why a zone may become unsafe, and allows response
+strategies to be rehearsed before they are used during a real event.
 
 ---
 
-## Slide 2: Our Solution
+## Slide 2: IDEA TITLE
 
-### On-slide title
+### Proposed Solution (Describe your Idea/Solution/Prototype)
 
-**MGHSIS Creates a Live Operational Digital Twin**
+**MGHSIS creates a live, explainable safety Digital Twin for mass gatherings.**
 
-### On-slide content
+- Maps a cricket stadium into **17 operational zones** and detailed segments.
+- Tracks **1,200 event-scoped safety bands** and their latest status.
+- Combines density, flow, distress, gate, weather, and infrastructure signals.
+- Classifies each zone as **Low, Moderate, High, or Critical** risk.
+- Shows risk scores, trends, contributing factors, alerts, and recommended actions.
+- Simulates congestion, distress, barricade breach, and gateway failure.
+- Keeps intervention approval and verification under human control.
 
-- Digital twin of a cricket stadium
-- 17 mapped venue zones and section segments
-- 1,200 event-scoped safety bands
-- Crowd, human-risk, and population-integrity monitoring
-- Alerts, interventions, replay, analytics, CCTV, and system health
-- One interface for observation, decision, and response verification
+### How it addresses the problem
+
+- Replaces fragmented monitoring screens with one shared operational picture.
+- Detects pressure through flow and capacity changes before it is visually obvious.
+- Links alerts to the exact zone, segment, gate, camera, or safety band.
+- Helps teams compare responses and verify whether conditions improve.
+
+### Innovation and uniqueness
+
+- The **Digital Twin, ML engine, and virtualisation** form one continuous workflow.
+- Predictions include ranked reasons rather than only a warning colour.
+- Scenario outcomes appear on the same stadium used for live monitoring.
+- The system is hardware-ready without claiming facial recognition or personal GPS.
 
 ### Visual direction
 
-Show the `/digital-twin` page in Live Twin mode. Highlight the stadium orbit, premium tiers, band markers, gates, cameras, heatmap, and live data rail.
+Use one strong screenshot of `/digital-twin` showing the stadium heatmap, band
+markers, zone rail, and virtualisation controls. Add only three short callouts:
+**See**, **Predict**, and **Respond**.
 
 ### Speaker notes
 
-The Digital Twin is the central spatial model of the venue. It connects the physical event layout to the software system. Each zone can be inspected, each segment can be compared, and each band can be opened for its current event-scoped status. The design is intended for repeated operational use, not only for a one-time visual demonstration.
-
-### Key message
-
-**MGHSIS turns the venue into a shared, spatially organized safety picture.**
-
----
-
-## Slide 3: How the ML Model Works
-
-### On-slide title
-
-**From Sensor Signals to Explainable Crowd-Risk Predictions**
-
-### On-slide content
-
-The model evaluates 22 features, including:
-
-- Current count, safe capacity, density, and utilization
-- Inflow, outflow, accumulation, and movement slowdown
-- Route width and exit availability
-- Heat index and crowd composition
-- Fall and SOS clusters
-- CCTV confidence and gateway health
-
-### Model output
-
-- Risk score from 0 to 100
-- LOW, MODERATE, HIGH, or CRITICAL classification
-- Confidence and trend
-- Ranked reasons for the prediction
-- Recommended operator actions
-
-### Speaker notes
-
-The model is a scikit-learn HistGradientBoostingClassifier. The backend converts a current zone observation into the 22-feature contract, runs local inference, and returns both the risk classification and an explanation. The model does not identify people, diagnose medical conditions, or autonomously authorize interventions. It supports an operator decision.
-
-### Key message
-
-**The ML layer does not only produce a risk color; it explains the contributing factors and proposes a response path.**
+The Digital Twin is the centre of MGHSIS. Operators can select a zone, inspect
+its live measurements and band status, understand why the model raised its risk
+level, and move directly into an intervention or rehearsal workflow. This is an
+operational command system rather than a static visual dashboard.
 
 ---
 
-## Slide 4: Training and Evaluation
+## Slide 3: TECHNICAL APPROACH
 
-### On-slide title
+### Technologies used
 
-**A Reproducible 100,000-Record Training Pipeline**
+- **Frontend:** Next.js, React, and TypeScript
+- **Backend:** FastAPI and Python
+- **ML:** scikit-learn `HistGradientBoostingClassifier`
+- **Observation contract:** event, source, timestamp, zone, sequence, and features
+- **Current inputs:** simulator and manual observations
+- **Integration-ready inputs:** CCTV analytics, BLE, RFID, counters, and sensors
 
-### On-slide content
+### Methodology and implementation flow
 
-- 100,000 deterministic synthetic zone observations
-- 80,000 records used for training
-- 20,000 records held out for testing
-- Four risk classes: Low, Moderate, High, Critical
-- Stratified holdout to preserve class balance
+`Sensors / Simulator -> Normalised Observation -> 22 ML Features -> Risk Prediction -> Digital Twin Heatmap -> Operator Alert -> Approved Intervention -> Outcome Verification`
 
-### Evaluation results
+### ML training and evaluation
 
-| Metric | Result |
+- **100,000** deterministic synthetic zone observations
+- **80,000 training / 20,000 testing** records with a stratified split
+- **22 features** covering density, utilization, flow, movement, routes, exits,
+  heat, crowd composition, distress signals, and sensor health
+- **Outputs:** 0-100 score, risk class, confidence, trend, reasons, and guidance
+
+| Evaluation metric | Current result |
 |---|---:|
 | Accuracy | 80.78% |
 | Macro F1 | 75.69% |
 | Critical-risk recall | 78.76% |
 | Multiclass log loss | 0.4316 |
 
-### Visual direction
+### Working prototype process
 
-Show the Analytics page with the ML Inference Online panel. Emphasize the 80,000/20,000 split and critical recall rather than only headline accuracy.
-
-### Speaker notes
-
-The dataset is synthetic and is designed to validate the software pipeline, model loading, API behavior, and operator workflow. It is not being presented as proof of real-world safety performance. Critical-risk recall is displayed separately because missing a serious crowd condition is more important than optimizing a single headline metric. Real deployment requires field-labelled data, sensor calibration, temporal validation, drift monitoring, and independent review.
-
-### Key message
-
-**The system has a measurable and reproducible ML pipeline, with transparent limitations.**
-
----
-
-## Slide 5: Real-Scenario Virtualisation
-
-### On-slide title
-
-**Operators Can Rehearse Escalation and Recovery Before a Live Event**
-
-### On-slide content
-
-The Virtualisation mode supports scenarios such as:
-
-- Stadium congestion
-- Individual distress
-- Barricade breach
-- Gateway failure
-- Redirect response
-
-### Simulation loop
-
-1. A scenario generates changing zone observations.
-2. The backend advances virtual time in 15-second steps.
-3. All 17 zones are scored by the ML model.
-4. The stadium sectors update with the current risk state.
-5. Operators apply a response and observe recovery.
+1. The backend receives or generates observations for all 17 zones.
+2. The ML model scores each zone and returns an explainable prediction.
+3. The Digital Twin updates colours, trends, alerts, and band context.
+4. The operator selects a response such as redirecting the crowd.
+5. Later observations show whether risk is falling or still increasing.
 
 ### Visual direction
 
-Show `/digital-twin` in Virtualisation mode. Demonstrate Block G rising to `CRITICAL`, then apply `Redirect G` and show the risk score falling over later ticks.
+Use one left-to-right architecture diagram. Put the four model metrics in a
+compact evidence strip below it instead of presenting a dense table.
 
 ### Speaker notes
 
-This is the bridge between a static dashboard and an operational decision system. The simulator creates a repeatable event drill. A congestion scenario increases inflow, reduces outflow, slows movement, narrows the route, and reduces exits. The ML model detects the resulting pressure. When the operator applies a redirect or alternate route, the next observations change and the risk score responds.
-
-### Key message
-
-**The product can demonstrate what happens before, during, and after an intervention.**
+The model is trained locally using a reproducible synthetic dataset so the
+complete pipeline can be demonstrated without collecting personal data.
+Synthetic results validate the software and experimentation workflow, not final
+field safety performance. Production use requires calibrated sensors,
+field-labelled observations, temporal validation, drift monitoring, and
+independent safety review.
 
 ---
 
-## Slide 6: Operations and Hardware Readiness
+## Slide 4: FEASIBILITY AND VIABILITY
 
-### On-slide title
+### Feasibility of the idea
 
-**Designed for Human-in-the-Loop Event Operations**
+- A working Next.js interface and FastAPI inference service already exist.
+- The twin models 17 zones, venue segments, gates, premium tiers, and 1,200 bands.
+- Live Twin and Virtualisation use the same spatial model and risk language.
+- Alerts support acknowledge/resolve; interventions support approve/reject/verify.
+- Observations use source identities, timestamps, and sequence validation.
+- Deployment can begin with existing CCTV and counters, then add BLE/RFID.
 
-### On-slide content
+### Potential challenges and risks
 
-- FastAPI backend for inference and event simulation
-- Next.js operations interface
-- Alerts with acknowledge and resolve lifecycle
-- Interventions with approve, reject, and verify lifecycle
-- Hardware observation contract for CCTV, BLE, RFID, manual, and simulator sources
-- Replayable event timeline and auditable actions
-- Zone and segment precision without facial recognition or GPS claims
+- Synthetic data may not fully represent real crowd behaviour.
+- Sensor blind spots, latency, drift, or failure can mislead the model.
+- Rare critical incidents provide limited labelled examples.
+- Venue geometry and safe capacities vary across events.
+- Operators could over-trust automated recommendations under pressure.
+- Physical deployment requires privacy, security, calibration, and reliability.
+
+### Strategies for overcoming challenges
+
+- Pilot controlled sections before attempting full-venue deployment.
+- Calibrate using field-labelled, event-specific observations.
+- Display confidence and sensor health; expose uncertainty clearly.
+- Require human approval and verification for every intervention.
+- Add temporal validation, drift monitoring, audit logs, and secure device identity.
+- Run congestion, distress, breach, and gateway-failure drills before events.
+
+### Viability roadmap
+
+`Prototype -> Controlled Pilot -> Sensor Calibration -> Shadow Operation -> Safety Review -> Limited Live Deployment -> Multi-Venue Scale`
 
 ### Visual direction
 
-Use a simple flow diagram:
-
-`Sensors / Cameras / Gateways -> Normalized Observation -> ML Risk Engine -> Operator Alert -> Approved Intervention -> Verification`
+Use three sections: **Ready Now**, **Deployment Risks**, and **Mitigation
+Roadmap**. Include a small virtualisation view showing a critical zone recovering
+after a redirect action.
 
 ### Speaker notes
 
-The current project is hardware-ready, not hardware-complete. The ingestion endpoint accepts event-scoped observations with source identity, timestamp, zone, and monotonic sequence numbers. Replayed or out-of-order observations are rejected. The future production path includes BLE gateway adapters, device provisioning, mutual TLS, PostgreSQL persistence, Redis/WebSocket updates, firmware signing, and field calibration.
-
-### Key message
-
-**MGHSIS keeps operators in control while providing a clear path from virtual commissioning to physical deployment.**
+The prototype proves the complete software path. The next phase is deliberately
+staged because event safety cannot rely on an uncalibrated model. Shadow-mode
+pilots allow predictions to be compared with operator observations before the
+system influences live decisions.
 
 ---
 
-## Slide 7: Impact, Demonstration, and Roadmap
+## Slide 5: IMPACT AND BENEFITS
 
-### On-slide title
+### Target audience
 
-**From Visibility to Safer, Measurable Decisions**
+- Stadium and venue command centres
+- Event organisers and crowd-safety teams
+- Security, medical, gate, and field-response personnel
+- Public authorities responsible for large gatherings
 
-### On-slide content
+### Potential impact
 
-### Demonstration flow
+- Earlier awareness of developing crowd pressure and distress
+- Faster understanding of where a risk is forming and why
+- More coordinated control-room and field-team decisions
+- Safer rehearsal of interventions before gates open
+- Measurable verification that an action improved the situation
 
-1. Open the Command Centre for the current event overview.
-2. Open `/digital-twin` and inspect Live Twin mode.
-3. Switch to Virtualisation.
-4. Activate Stadium Congestion.
-5. Watch Block G move toward CRITICAL and RISING_FAST.
-6. Apply Redirect G or Open Alternate Route.
-7. Observe the risk trend and verify the simulated recovery.
+### Benefits of the solution
 
-### Expected impact
+- **Social:** supports safer movement, quicker response, and vulnerable groups.
+- **Operational:** unifies zones, bands, alerts, cameras, and interventions.
+- **Economic:** targets responses instead of closing large venue areas.
+- **Environmental:** reuses available sensing infrastructure where practical.
+- **Governance:** audits observations, predictions, approvals, and outcomes.
 
-- Earlier awareness of developing crowd pressure
-- Faster access to the reason behind a warning
-- More consistent operator decisions
-- Safer rehearsal before an event
-- Measurable verification of intervention outcomes
+### Pilot success measures
 
-### Roadmap
+- Critical-risk recall and false-alert rate on field-labelled observations
+- Time from detection to operator acknowledgement
+- Time from approved intervention to observed recovery
+- Sensor uptime, data latency, and trustworthy zone coverage
+- Operator agreement with explanations and recommended actions
 
-- Connect calibrated physical sensors and wearable bands
-- Collect and label real event data
-- Add persistent event storage and real-time WebSocket fan-out
-- Validate model performance in controlled field pilots
-- Add drift monitoring, security hardening, and independent safety review
+### Visual direction
 
-### Closing statement
+Show the journey **Fragmented Signals -> Shared Twin -> Explained Risk ->
+Coordinated Response -> Verified Recovery** with a small risk trend line.
 
-**MGHSIS is a practical safety intelligence layer for mass gatherings: it unifies venue data, explains emerging risk, helps operators rehearse responses, and creates a responsible path toward real-world deployment.**
+### Speaker notes
 
-### Final speaker notes
+MGHSIS improves decision quality rather than replacing trained personnel. Its
+value comes from early spatial awareness, explainable analysis, rehearsal, and
+post-action verification. Pilot success must be measured through safety and
+operational outcomes, not only ML accuracy.
 
-The important distinction is that this project is not claiming that synthetic ML alone can guarantee safety. It demonstrates the complete foundation: a venue model, an evaluated inference pipeline, a real-time simulation loop, operator workflows, and a hardware integration boundary. The next phase is to replace simulated observations with calibrated field data while preserving the same explainable, human-controlled operating model.
+---
 
+## Slide 6: RESEARCH AND REFERENCES
+
+### Crowd-safety and mass-gathering research
+
+- World Health Organization, [**Generic All-Hazards Risk Assessment Tool for Mass Gathering Events**](https://www.who.int/publications/i/item/WHO-2023-Generic-Mass-gatherings-All-Hazards-RAtool-2023-1)
+- UK Health and Safety Executive, [**Assess Crowd Safety Risks and Identify Hazards**](https://www.hse.gov.uk/event-safety/crowd-management-assess.htm)
+- UK Health and Safety Executive, [**Put Crowd Controls in Place**](https://www.hse.gov.uk/event-safety/crowd-management-controls.htm)
+
+### Technical references
+
+- scikit-learn, [**HistGradientBoostingClassifier**](https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.HistGradientBoostingClassifier.html)
+- scikit-learn, [**Metrics and Scoring**](https://scikit-learn.org/stable/modules/model_evaluation.html)
+- FastAPI, [**Official Documentation**](https://fastapi.tiangolo.com/)
+- Next.js, [**App Router Documentation**](https://nextjs.org/docs/app)
+
+### Project evidence
+
+- Working Command Centre, Digital Twin, Bands, Alerts, Interventions, and CCTV
+- Integrated scenario virtualisation and live ML heatmap
+- Reproducible synthetic-data generator and ML training pipeline
+- Evaluation report containing the 80/20 holdout results
+- APIs for inference, simulation, interventions, and hardware observations
+
+### Visual direction
+
+Use short reference titles in two columns: **Safety Research** and **Technical
+Foundation**. Add a repository QR code only after confirming sharing permission.
+
+### Speaker notes
+
+The safety approach follows all-hazards risk assessment and established
+crowd-management principles covering arrival, circulation, exit, and dispersal.
+The implementation uses documented open-source technologies. The team can show
+the working repository and model report during judging where permitted.
+
+---
+
+## Submission Checklist
+
+- Keep the final presentation to **six slides including the title slide**.
+- Delete the template's **Important Instructions** slide.
+- Preserve the supplied SIH template and all required content pointers.
+- Prefer points, diagrams, infographics, and screenshots over paragraphs.
+- Replace every bracketed title-page field with the exact portal value.
+- Confirm the registered Problem Statement category before filling it in.
+- Export the completed presentation as **PDF** for portal upload.
+- Do not present synthetic results as proven real-world safety performance.
