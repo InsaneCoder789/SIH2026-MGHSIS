@@ -1,3 +1,5 @@
+name: mghsis
+
 services:
   web:
     build:
@@ -5,11 +7,13 @@ services:
     ports:
       - "3000:3000"
     environment:
+      MGHSIS_API_BASE_URL: http://api:8000
       NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
       NEXT_PUBLIC_WS_BASE_URL: ws://localhost:8000
     depends_on:
       api:
         condition: service_healthy
+    restart: unless-stopped
 
   api:
     build:
@@ -19,40 +23,54 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://mghsis:mghsis_dev_password@postgres:5432/mghsis
       REDIS_URL: redis://redis:6379/0
+      REDIS_PREFIX: ${REDIS_PREFIX:-mghsis}
+      REDIS_SNAPSHOT_TTL_SECONDS: ${REDIS_SNAPSHOT_TTL_SECONDS:-3600}
+      HARDWARE_HISTORY_LIMIT: ${HARDWARE_HISTORY_LIMIT:-500}
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/system/readiness', timeout=2)"]
       interval: 10s
       timeout: 3s
       retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.4-alpine
+    container_name: mghsis-redis
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
 
   postgres:
-    image: postgres:16-alpine
+    image: postgres:17-alpine
+    container_name: mghsis-postgres
     environment:
-      POSTGRES_DB: mghsis
-      POSTGRES_USER: mghsis
-      POSTGRES_PASSWORD: mghsis_dev_password
+      POSTGRES_DB: ${POSTGRES_DB:-mghsis}
+      POSTGRES_USER: ${POSTGRES_USER:-mghsis}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mghsis_dev_password}
     ports:
       - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U mghsis -d mghsis"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mghsis} -d ${POSTGRES_DB:-mghsis}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
 
 volumes:
+  redis-data:
   postgres-data:

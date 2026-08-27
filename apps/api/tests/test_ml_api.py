@@ -1,4 +1,5 @@
 from fastapi.testclient import TestClient
+from uuid import uuid4
 
 from app.main import app
 
@@ -62,7 +63,7 @@ def test_congested_zone_scores_above_normal_zone() -> None:
 
 def test_hardware_ingestion_rejects_replayed_sequence() -> None:
     payload = {
-        "source_id": "gateway-test-unique",
+        "source_id": f"gateway-test-{uuid4()}",
         "source_type": "BLE_GATEWAY",
         "event_id": "demo",
         "zone_id": "G",
@@ -72,4 +73,14 @@ def test_hardware_ingestion_rejects_replayed_sequence() -> None:
     }
     assert client.post("/api/v1/hardware/observations", json=payload).status_code == 202
     assert client.post("/api/v1/hardware/observations", json=payload).status_code == 409
+    recent = client.get("/api/v1/hardware/observations/recent?limit=10").json()
+    assert any(item["source_id"] == payload["source_id"] for item in recent["observations"])
 
+
+def test_system_health_exposes_real_runtime_dependencies() -> None:
+    response = client.get("/api/v1/system/health")
+    assert response.status_code == 200
+    body = response.json()
+    names = {service["name"] for service in body["services"]}
+    assert {"Event API", "Redis Shared Runtime", "Crowd Risk Model", "Simulation State", "Hardware Event Stream"} <= names
+    assert body["status"] in {"READY", "DEGRADED"}

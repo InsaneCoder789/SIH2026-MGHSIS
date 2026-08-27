@@ -12,7 +12,7 @@ This repository has been bootstrapped from `MASTER.md` and includes:
 - `apps/api`: FastAPI core with persisted onboard crowd-risk ML inference, evaluation metrics, and hardware-ready observation ingestion.
 - `services/*`: simulator and analytics service placeholders for the ordered roadmap.
 - `packages/*`, `infra/*`, `docs/*`: monorepo structure from the source-of-truth document.
-- `docker-compose.yml`: local PostgreSQL, Redis, API, and web service wiring.
+- `docker-compose.yml`: local PostgreSQL, Redis, API, and web service wiring with persistent data volumes.
 
 The UI uses the uploaded cricket stadium seating reference to model block-level heatmap zones, a server-paginated catalogue of 20,000 deterministic Smart Safety Bands, a bounded 1,200-track Digital Twin sample, and explainable demo risk. The backend trains and serves a crowd-risk classifier from a reproducible 100,000-row synthetic corpus (80,000 train / 20,000 holdout). It does not claim medical diagnosis, facial recognition, exact GPS tracking, or completed physical hardware integration.
 
@@ -20,7 +20,14 @@ The UI uses the uploaded cricket stadium seating reference to model block-level 
 
 ```bash
 npm install
+npm run infra:up
 npm run dev
+```
+
+Run the API in another terminal:
+
+```bash
+PYTHONPATH=apps/api .venv/bin/uvicorn app.main:app --app-dir apps/api --reload --port 8000
 ```
 
 Open `http://localhost:3000`. The main routes are:
@@ -39,6 +46,7 @@ Open `http://localhost:3000`. The main routes are:
 - `/api/v1/ml/crowd-risk/predict`: single zone inference endpoint
 - `/api/v1/ml/crowd-risk/demo-zones`: inference for every demo stadium zone
 - `/api/v1/hardware/observations`: ordered CCTV, BLE gateway, RFID, manual, or simulator observations
+- `/api/v1/system/health`: live API, Redis, ML, simulation-state, and ingestion diagnostics
 
 ## Frontend Commands
 
@@ -74,7 +82,17 @@ The current command centre includes deterministic frontend scenario controls, 20
 - Search, hide, distress-only, and selected-zone wristband controls
 - Click-through from a map dot to the corresponding Band Detail record
 
-The Analytics module connects to FastAPI when it is running and clearly reports when the deterministic frontend fallback is active. The next backend phase connects these contracts to Redis/WebSockets, persisted events, and simulators so verification derives from live simulated state.
+The Analytics module connects to FastAPI when it is running and clearly reports when the deterministic frontend fallback is active. Redis now provides shared simulation control state, the latest scored Digital Twin snapshot, sensor replay protection, bounded observation history, and pub/sub channels for downstream real-time consumers. If Redis is unavailable, the API keeps a local demonstration fallback while readiness and System Health report the degradation.
+
+## Redis Runtime
+
+```bash
+npm run infra:up
+npm run infra:status
+npm run infra:down
+```
+
+Redis persists to the `mghsis_redis-data` Docker volume. Runtime keys are namespaced by `REDIS_PREFIX`; simulation events publish to `mghsis:events:simulation` and hardware observations publish to `mghsis:events:hardware`.
 
 ## Repository Structure
 

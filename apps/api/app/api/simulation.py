@@ -5,9 +5,11 @@ from datetime import datetime, timezone
 from threading import Lock
 from typing import Literal
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from app.core.config import settings
+from app.core.redis_runtime import redis_runtime
 from app.ml.model import crowd_risk_model
 from app.ml.schemas import CrowdObservation
 
@@ -54,6 +56,26 @@ class SimulationState:
         self.tick = 0
         self.action = None
         self.action_zone = None
+
+    def export_control_state(self) -> dict[str, object]:
+        return {
+            "scenario": self.scenario,
+            "running": self.running,
+            "tick": self.tick,
+            "action": self.action,
+            "action_zone": self.action_zone,
+        }
+
+    def restore_control_state(self, state: dict[str, object]) -> None:
+        scenario = state.get("scenario")
+        if scenario in {"normal", "distress", "congestion", "breach", "gateway", "redirect"}:
+            self.scenario = scenario  # type: ignore[assignment]
+        self.running = bool(state.get("running", False))
+        self.tick = max(0, int(state.get("tick", 0)))
+        action = state.get("action")
+        self.action = str(action) if action else None
+        action_zone = state.get("action_zone")
+        self.action_zone = str(action_zone) if action_zone else None
 
     def _observation(self, zone_id: str, capacity: int, area: int) -> CrowdObservation:
         phase = self.tick * 0.22 + sum(ord(char) for char in zone_id) * 0.03
@@ -154,46 +176,75 @@ class SimulationState:
 
 
 simulation = SimulationState()
+SIMULATION_STATE_KEY = f"{settings.redis_prefix}:simulation:virtual-live-event:control"
+SIMULATION_SNAPSHOT_KEY = f"{settings.redis_prefix}:simulation:virtual-live-event:snapshot"
+SIMULATION_LOCK_KEY = f"{settings.redis_prefix}:locks:simulation:virtual-live-event"
+SIMULATION_CHANNEL = f"{settings.redis_prefix}:events:simulation"
+
+
+def _simulation_response(operation: str, update: object | None = None, advance: bool = False) -> dict[str, object]:
+    with redis_runtime.lock(SIMULATION_LOCK_KEY) as shared_lock:
+        if redis_runtime.available and not shared_lock:
+            raise HTTPException(status_code=503, detail="Shared simulation state is busy; retry the command")
+        with simulation.lock:
+            if shared_lock:
+                shared_state = redis_runtime.get_json(SIMULATION_STATE_KEY)
+                if shared_state:
+                    simulation.restore_control_state(shared_state)
+            if callable(update):
+                update()
+            snapshot = simulation.snapshot(advance=advance)
+            if shared_lock:
+                redis_runtime.transaction_json(
+                    [
+                        (SIMULATION_STATE_KEY, simulation.export_control_state(), None),
+                        (SIMULATION_SNAPSHOT_KEY, snapshot, settings.redis_snapshot_ttl_seconds),
+                    ],
+                    SIMULATION_CHANNEL,
+                    {
+                        "operation": operation,
+                        "simulation_id": snapshot["simulation_id"],
+                        "scenario": snapshot["scenario"],
+                        "running": snapshot["running"],
+                        "tick": snapshot["tick"],
+                        "active_action": snapshot["active_action"],
+                    },
+                )
+            snapshot["shared_runtime"] = "REDIS" if shared_lock and redis_runtime.available else "LOCAL_FALLBACK"
+            return snapshot
 
 
 @router.get("/state")
 def simulation_state() -> dict[str, object]:
-    with simulation.lock:
-        return simulation.snapshot()
+    return _simulation_response("TICK", advance=True)
 
 
 @router.post("/start")
 def start_simulation() -> dict[str, object]:
-    with simulation.lock:
-        simulation.running = True
-        return simulation.snapshot(advance=False)
+    return _simulation_response("START", lambda: setattr(simulation, "running", True))
 
 
 @router.post("/pause")
 def pause_simulation() -> dict[str, object]:
-    with simulation.lock:
-        simulation.running = False
-        return simulation.snapshot(advance=False)
+    return _simulation_response("PAUSE", lambda: setattr(simulation, "running", False))
 
 
 @router.post("/reset")
 def reset_simulation() -> dict[str, object]:
-    with simulation.lock:
-        simulation.reset()
-        return simulation.snapshot(advance=False)
+    return _simulation_response("RESET", simulation.reset)
 
 
 @router.post("/scenario")
 def choose_scenario(request: ScenarioRequest) -> dict[str, object]:
-    with simulation.lock:
+    def update() -> None:
         simulation.set_scenario(request.scenario)
         simulation.running = True
-        return simulation.snapshot(advance=False)
+    return _simulation_response("SCENARIO_SELECTED", update)
 
 
 @router.post("/action")
 def apply_simulated_action(request: ActionRequest) -> dict[str, object]:
-    with simulation.lock:
+    def update() -> None:
         simulation.action = request.action
         simulation.action_zone = request.zone_id
-        return simulation.snapshot(advance=False)
+    return _simulation_response("ACTION_APPLIED", update)

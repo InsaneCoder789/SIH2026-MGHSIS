@@ -1,14 +1,26 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.hardware import router as hardware_router
 from app.api.ml import router as ml_router
 from app.api.simulation import router as simulation_router
+from app.api.system import router as system_router
+from app.core.redis_runtime import redis_runtime
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    redis_runtime.connect()
+    yield
+    redis_runtime.close()
 
 app = FastAPI(
     title="MGHSIS Core API",
     version="0.2.0",
     description="Local-first mass-gathering safety intelligence, onboard ML inference, and hardware-ready ingestion.",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -21,6 +33,7 @@ app.add_middleware(
 app.include_router(ml_router)
 app.include_router(hardware_router)
 app.include_router(simulation_router)
+app.include_router(system_router)
 
 
 @app.get("/health")

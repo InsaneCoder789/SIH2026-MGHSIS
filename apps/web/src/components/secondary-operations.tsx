@@ -8,7 +8,7 @@ import {
   ShieldCheck, Siren, SlidersHorizontal, UsersRound, Video, Workflow,
   type LucideIcon,
 } from "lucide-react";
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { useDemoOperations } from "@/components/demo-operations-context";
 import { OperationsHeader } from "@/components/operations-header";
 import { CAMERA_FEEDS, SCENARIO_CATALOG, type CameraFeed, type TimelineRecord } from "@/lib/operations-data";
@@ -166,17 +166,60 @@ export function RiskAnalytics() {
   </main>;
 }
 
-const services = [
-  { name:"Event API",group:"CORE",health:100,latency:18,status:"HEALTHY" },{ name:"Realtime WebSocket",group:"CORE",health:98,latency:24,status:"HEALTHY" },{ name:"Band Simulator",group:"SIMULATION",health:99,latency:31,status:"HEALTHY" },{ name:"Gateway Fusion",group:"INGESTION",health:97,latency:42,status:"HEALTHY" },{ name:"CCTV Analytics",group:"VISION",health:94,latency:68,status:"DEGRADED" },{ name:"Risk Engine",group:"INTELLIGENCE",health:100,latency:12,status:"HEALTHY" },{ name:"Alert Service",group:"RESPONSE",health:100,latency:16,status:"HEALTHY" },{ name:"Audit Store",group:"DATA",health:99,latency:22,status:"HEALTHY" },
-] as const;
+type RuntimeService = {
+  name: string;
+  group: string;
+  health: number;
+  latency: number;
+  status: "HEALTHY" | "DEGRADED" | "OFFLINE";
+  detail: string;
+  required: boolean;
+};
+
+type RuntimeHealthResponse = {
+  status: "READY" | "DEGRADED" | "OFFLINE";
+  ready: boolean;
+  services: Array<Omit<RuntimeService, "latency"> & { latency_ms: number }>;
+};
+
+const fallbackServices: RuntimeService[] = [
+  { name:"Event API",group:"CORE",health:0,latency:0,status:"OFFLINE",detail:"Waiting for backend diagnostics",required:true },
+  { name:"Redis Shared Runtime",group:"DATA",health:0,latency:0,status:"OFFLINE",detail:"Waiting for shared-state diagnostics",required:true },
+  { name:"Crowd Risk Model",group:"INTELLIGENCE",health:0,latency:0,status:"OFFLINE",detail:"Waiting for model diagnostics",required:true },
+  { name:"Simulation State",group:"SIMULATION",health:0,latency:0,status:"OFFLINE",detail:"Waiting for simulation diagnostics",required:true },
+  { name:"Hardware Event Stream",group:"INGESTION",health:0,latency:0,status:"OFFLINE",detail:"Waiting for ingestion diagnostics",required:true },
+];
 
 export function SystemHealth() {
   const [runs,setRuns]=useState(0);
-  const [selected,setSelected]=useState<string>(services[0].name);
+  const [selected,setSelected]=useState<string>(fallbackServices[0].name);
+  const [services,setServices]=useState<RuntimeService[]>(fallbackServices);
+  const [checking,setChecking]=useState(true);
+  const loadDiagnostics = useCallback(async (manual = false) => {
+    setChecking(true);
+    try {
+      const response = await fetch("/api/system-health", { cache:"no-store" });
+      const payload = await response.json() as RuntimeHealthResponse;
+      setServices(payload.services.map(item => ({ ...item, latency:item.latency_ms })));
+    } catch {
+      setServices(fallbackServices);
+    } finally {
+      setChecking(false);
+      if (manual) setRuns(value => value + 1);
+    }
+  }, []);
+  useEffect(() => {
+    const initial=window.setTimeout(()=>void loadDiagnostics(),0);
+    const timer=window.setInterval(()=>void loadDiagnostics(),10_000);
+    return()=>{ window.clearTimeout(initial); window.clearInterval(timer); };
+  },[loadDiagnostics]);
   const service=services.find(item=>item.name===selected)??services[0];
-  return <main className="ops-module-page"><OperationsHeader section="Health"/><ModuleTitle eyebrow="Local-First Infrastructure" title="System Health" description="Monitor API, simulator, gateway, camera, risk, WebSocket and persistence services." status="97.8% healthy"/>
-    <MetricStrip items={[{label:"Core services",value:services.length,icon:Server,tone:"teal"},{label:"Healthy",value:services.filter(s=>s.status==="HEALTHY").length,icon:ShieldCheck,tone:"green"},{label:"Degraded",value:services.filter(s=>s.status==="DEGRADED").length,icon:AlertTriangle,tone:"orange"},{label:"Diagnostics",value:runs,icon:RefreshCw,tone:"blue"}]} />
-    <div className="health-layout"><section className="service-matrix"><header><div><p className="eyebrow">Service Matrix</p><h2>Runtime dependencies</h2></div><button onClick={()=>setRuns(value=>value+1)}><RefreshCw size={14}/>Run diagnostics</button></header><div>{services.map(item=><button key={item.name} className={selected===item.name?"selected":""} onClick={()=>setSelected(item.name)}><Activity size={17}/><div><strong>{item.name}</strong><span>{item.group}</span></div><i><b style={{width:`${item.health}%`}}/></i><em>{item.latency} ms</em><small className={item.status.toLowerCase()}>{item.status}</small></button>)}</div></section><aside className="health-inspector"><header><span>{service.group}</span><h2>{service.name}</h2><strong>{service.status}</strong></header><div className="health-gauge" style={{"--health":`${service.health*3.6}deg`} as CSSProperties}><div><strong>{service.health}%</strong><span>availability</span></div></div><dl><div><dt>Current latency</dt><dd>{service.latency} ms</dd></div><div><dt>Last heartbeat</dt><dd>4 seconds ago</dd></div><div><dt>Deployment</dt><dd>Local Docker network</dd></div><div><dt>Dependencies</dt><dd>2 healthy</dd></div></dl><section><Check size={16}/><div><strong>Diagnostic {runs ? `#${runs} passed` : "ready"}</strong><span>No critical service dependency failure detected.</span></div></section></aside></div>
+  const healthy=services.filter(item=>item.status==="HEALTHY").length;
+  const offline=services.filter(item=>item.status==="OFFLINE").length;
+  const overall=offline===0&&healthy===services.length?"READY":checking?"CHECKING":"DEGRADED";
+  return <main className="ops-module-page"><OperationsHeader section="Health"/><ModuleTitle eyebrow="Local-First Infrastructure" title="System Health" description="Monitor API, shared Redis state, onboard intelligence, simulation and hardware ingestion." status={overall}/>
+    <MetricStrip items={[{label:"Core services",value:services.length,icon:Server,tone:"teal"},{label:"Healthy",value:healthy,icon:ShieldCheck,tone:"green"},{label:"Offline",value:offline,icon:AlertTriangle,tone:"orange"},{label:"Diagnostics",value:runs,icon:RefreshCw,tone:"blue"}]} />
+    <div className="health-layout"><section className="service-matrix"><header><div><p className="eyebrow">Service Matrix</p><h2>Live runtime dependencies</h2></div><button disabled={checking} onClick={()=>void loadDiagnostics(true)}><RefreshCw className={checking?"spin":""} size={14}/>{checking?"Checking":"Run diagnostics"}</button></header><div>{services.map(item=><button key={item.name} className={selected===item.name?"selected":""} onClick={()=>setSelected(item.name)}><Activity size={17}/><div><strong>{item.name}</strong><span>{item.group}</span></div><i><b className={item.status.toLowerCase()} style={{width:`${item.health}%`}}/></i><em>{item.latency} ms</em><small className={item.status.toLowerCase()}>{item.status}</small></button>)}</div></section><aside className={`health-inspector ${service.status.toLowerCase()}`}><header><span>{service.group}</span><h2>{service.name}</h2><strong>{service.status}</strong></header><div className="health-gauge" style={{"--health":`${service.health*3.6}deg`} as CSSProperties}><div><strong>{service.health}%</strong><span>availability</span></div></div><dl><div><dt>Current latency</dt><dd>{service.latency} ms</dd></div><div><dt>Last heartbeat</dt><dd>{checking?"Checking now":"Live"}</dd></div><div><dt>Deployment</dt><dd>Local runtime</dd></div><div><dt>Dependency</dt><dd>{service.required?"Required":"Optional"}</dd></div></dl><section><Check size={16}/><div><strong>{service.status==="HEALTHY"?"Diagnostic passed":"Action required"}</strong><span>{service.detail}</span></div></section></aside></div>
   </main>;
 }
 

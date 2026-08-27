@@ -8,6 +8,9 @@
   "scripts": {
     "dev": "npm --workspace apps/web run dev",
     "build": "npm --workspace apps/web run build",
-    "lint": "npm --workspace apps/web run lint"
+    "lint": "npm --workspace apps/web run lint",
+    "infra:up": "docker compose up -d redis postgres",
+    "infra:down": "docker compose down",
+    "infra:status": "docker compose ps"
   }
 }
