@@ -6,10 +6,10 @@ import {
   Hand, HeartPulse, ListFilter, LocateFixed, LockKeyhole, Minus, MousePointer2,
   Plus, Radio, RotateCcw, ShieldCheck, Siren, Users, UsersRound, Wind,
 } from "lucide-react";
-import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type MouseEvent, type ReactNode } from "react";
 import { useDemoOperations } from "@/components/demo-operations-context";
 import { OperationsHeader } from "@/components/operations-header";
-import { TWIN_RENDER_BANDS, type SafetyBand } from "@/lib/bands";
+import { getTwinMapBands, type TwinMapBand } from "@/lib/bands";
 import {
   getDigitalTwinSnapshot, levelFor, scenarioNotes,
   type RiskLevel, type Scenario, type Zone,
@@ -68,6 +68,8 @@ const timelineRows: Array<[string, string, "ALERT" | "ACTION" | "SYSTEM"]> = [
 const riskColors: Record<RiskLevel, string> = {
   low: "#76b85a", moderate: "#e1c326", high: "#ef9414", critical: "#ed4a37",
 };
+
+const subscribeToBrowser = () => () => undefined;
 
 const visualSectors: VisualSector[] = [
   { id: "M", label: "Block M", zoneId: "M", ring: "outer", start: 310, end: 352, color: "#5c99ad", divisions: 6 },
@@ -181,7 +183,7 @@ function BowlSector({ sector, zone, selected, heatmapVisible, onSelect }: { sect
   </g>;
 }
 
-function virtualBandOffset(band: SafetyBand, scenario: string | undefined, tick: number) {
+function virtualBandOffset(band: TwinMapBand, scenario: string | undefined, tick: number) {
   if (!scenario || scenario === "normal") return { x: 0, y: 0 };
   const phase = (tick + band.id % 13) * 0.52;
   const pulse = Math.sin(phase) * 3.4;
@@ -212,12 +214,83 @@ function VirtualCrowdFlow({ scenario, running }: { scenario?: string; running?: 
   </g>;
 }
 
+function BandMapCanvas({ bands, selectedBand, onSelectBand, movementScenario, movementTick }: {
+  bands: TwinMapBand[];
+  selectedBand?: number | null;
+  onSelectBand: (bandId: number) => void;
+  movementScenario?: string;
+  movementTick: number;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const pixelRatio = 1;
+    canvas.width = 900 * pixelRatio;
+    canvas.height = 690 * pixelRatio;
+    const context = canvas.getContext("2d");
+    if (!context) return;
+    context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+    context.clearRect(0, 0, 900, 690);
+
+    const colors = { NORMAL: "#48cf82", ELEVATED: "#e1c326", OFFLINE: "#778186", DISTRESSED: "#ed4a37", SOS: "#ed4a37" } as const;
+    for (const status of ["NORMAL", "ELEVATED", "OFFLINE", "DISTRESSED", "SOS"] as const) {
+      context.beginPath();
+      for (const band of bands) {
+        if (band.id === selectedBand || band.status !== status) continue;
+        const offset = virtualBandOffset(band, movementScenario, movementTick);
+        context.moveTo(band.dotPositionX + offset.x + (band.sos ? 3.2 : 2.1), band.dotPositionY + offset.y);
+        context.arc(band.dotPositionX + offset.x, band.dotPositionY + offset.y, band.sos ? 3.2 : 2.1, 0, Math.PI * 2);
+      }
+      context.fillStyle = colors[status];
+      context.fill();
+      context.strokeStyle = "rgba(5,16,18,.8)";
+      context.lineWidth = 0.8;
+      context.stroke();
+    }
+
+    const selected = bands.find((band) => band.id === selectedBand);
+    if (selected) {
+      const offset = virtualBandOffset(selected, movementScenario, movementTick);
+      context.beginPath();
+      context.arc(selected.dotPositionX + offset.x, selected.dotPositionY + offset.y, 4.2, 0, Math.PI * 2);
+      context.fillStyle = colors[selected.status];
+      context.fill();
+      context.strokeStyle = "#ffffff";
+      context.lineWidth = 1.5;
+      context.stroke();
+    }
+  }, [bands, movementScenario, movementTick, selectedBand]);
+
+  const selectNearestBand = (event: MouseEvent<HTMLCanvasElement>) => {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const x = (event.clientX - bounds.left) * (900 / bounds.width);
+    const y = (event.clientY - bounds.top) * (690 / bounds.height);
+    let nearest: TwinMapBand | undefined;
+    let nearestDistance = 7 * 7;
+    for (const band of bands) {
+      const offset = virtualBandOffset(band, movementScenario, movementTick);
+      const distance = (band.dotPositionX + offset.x - x) ** 2 + (band.dotPositionY + offset.y - y) ** 2;
+      if (distance < nearestDistance) {
+        nearest = band;
+        nearestDistance = distance;
+      }
+    }
+    if (nearest) onSelectBand(nearest.id);
+  };
+
+  return <foreignObject x="0" y="0" width="900" height="690" className="band-map-canvas-layer">
+    <canvas ref={canvasRef} onClick={selectNearestBand} aria-label={`${bands.length} interactive safety bands visible`} />
+  </foreignObject>;
+}
+
 export function StadiumTwin({ zones, selectedZone, onSelect, zoom, bands, selectedBand, onSelectBand, showHeatmap, showGates, showCameras, movementScenario, movementTick = 0, movementRunning = false }: {
   zones: Zone[];
   selectedZone: string;
   onSelect: (id: string) => void;
   zoom: number;
-  bands: SafetyBand[];
+  bands: TwinMapBand[];
   selectedBand: number | null;
   onSelectBand: (id: number) => void;
   showHeatmap: boolean;
@@ -228,7 +301,6 @@ export function StadiumTwin({ zones, selectedZone, onSelect, zoom, bands, select
   movementRunning?: boolean;
 }) {
   const sectionTicks = useMemo(() => Array.from({ length: 52 }, (_, index) => index * (360 / 52)), []);
-  const renderedBands = useMemo(() => bands.toSorted((a, b) => a.riskScore - b.riskScore || a.id - b.id), [bands]);
   return <div className="stadium-stage" style={{ "--stadium-zoom": zoom } as CSSProperties}>
     <svg viewBox="0 0 900 690" role="img" aria-label="Interactive cricket stadium digital twin risk heatmap">
       <defs>
@@ -266,16 +338,7 @@ export function StadiumTwin({ zones, selectedZone, onSelect, zoom, bands, select
             <path d={arcPath(450, 330, 426, 472, 128, 232, 0.2)} className="premium-tier tier-fifth" />
             {[382, 426].map((radius) => <path key={radius} d={arcPath(450, 330, radius - 0.5, radius + 0.5, 128, 232, 0)} className="premium-tier-divider" />)}
           </g>
-          <g className="band-map-layer" aria-label={`${bands.length} safety bands visible`}>
-            {renderedBands.map((band) => { const offset = virtualBandOffset(band, movementScenario, movementTick); return <g key={band.id} data-band-id={band.id} data-zone={band.zone} transform={`translate(${offset.x.toFixed(2)} ${offset.y.toFixed(2)})`} aria-label={`${band.code}, ${band.status}, risk ${band.riskScore}`} onClick={(event) => { event.stopPropagation(); onSelectBand(band.id); }}>
-              <circle
-                cx={band.dotPositionX}
-                cy={band.dotPositionY}
-                r={selectedBand === band.id ? 4.2 : band.sos ? 3.2 : 2.1}
-                className={`band-map-dot ${band.status.toLowerCase()} ${selectedBand === band.id ? "selected" : ""}`}
-              />
-            </g>; })}
-          </g>
+          <BandMapCanvas bands={bands} selectedBand={selectedBand} onSelectBand={onSelectBand} movementScenario={movementScenario} movementTick={movementTick} />
           <VirtualCrowdFlow scenario={movementScenario} running={movementRunning} />
         </g>
         <ellipse cx="450" cy="330" rx="181" ry="140" fill="url(#turf)" className="field" />
@@ -341,6 +404,8 @@ function ScenarioPanel({ scenario, onScenario }: { scenario: Scenario; onScenari
 
 export function CommandCenterDashboard() {
   const { scenario, activateScenario } = useDemoOperations();
+  const isBrowser = useSyncExternalStore(subscribeToBrowser, () => true, () => false);
+  const mapBands = useMemo(() => isBrowser ? getTwinMapBands() : [], [isBrowser]);
   const [selectedZone, setSelectedZone] = useState("G");
   const [zoom, setZoom] = useState(1);
   const [selectedBandId, setSelectedBandId] = useState<number | null>(null);
@@ -349,7 +414,7 @@ export function CommandCenterDashboard() {
   const capacity = scenario === "normal" ? 62 : scenario === "congestion" ? 67 : 64;
   return <main className="command-center"><OperationsHeader section="Command Centre" /><CommandHeader scenario={scenario} /><div className="operations-grid">
     <section className="twin-workspace" id="digital-twin"><StatusOverlay capacity={capacity} scenario={scenario} /><MapTools zoom={zoom} setZoom={setZoom} /><RiskLegend />
-      <StadiumTwin zones={zones} selectedZone={selected.id} onSelect={(zone) => { setSelectedZone(zone); setSelectedBandId(null); }} zoom={zoom} bands={TWIN_RENDER_BANDS} selectedBand={selectedBandId} onSelectBand={(bandId) => { const band = TWIN_RENDER_BANDS.find((item) => item.id === bandId); setSelectedBandId(bandId); if (band) setSelectedZone(band.zone); }} showHeatmap showGates showCameras />
+      <StadiumTwin zones={zones} selectedZone={selected.id} onSelect={(zone) => { setSelectedZone(zone); setSelectedBandId(null); }} zoom={zoom} bands={mapBands} selectedBand={selectedBandId} onSelectBand={(bandId) => { const band = mapBands.find((item) => item.id === bandId); setSelectedBandId(bandId); if (band) setSelectedZone(band.zone); }} showHeatmap showGates showCameras />
     </section>
     <AlertPanel /><KeyMetrics zones={zones} selectedZone={selected} /><EventTimeline /><ScenarioPanel scenario={scenario} onScenario={activateScenario} />
   </div></main>;

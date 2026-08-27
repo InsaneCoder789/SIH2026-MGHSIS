@@ -37,6 +37,8 @@ export type SafetyBand = {
   };
 };
 
+export type TwinMapBand = Pick<SafetyBand, "id" | "code" | "zone" | "status" | "sos" | "riskScore" | "dotPositionX" | "dotPositionY">;
+
 export type BandRegistryRecord = Omit<SafetyBand, "risk" | "history" | "dotPositionX" | "dotPositionY">;
 
 export type BandPopulationSummary = {
@@ -52,6 +54,7 @@ export type BandPopulationSummary = {
 export const BAND_ZONES = ["M", "N", "P", "Q", "R", "J", "K", "C", "D", "E", "F", "G", "H", "B", "SPW", "SPC", "SPE"] as const;
 export const DEMO_BAND_COUNT = 20_000;
 export const TWIN_RENDER_BAND_COUNT = 1_200;
+export const TWIN_MAP_BAND_COUNT = 5_000;
 export const DEMO_BAND_SUMMARY: BandPopulationSummary = {
   total: DEMO_BAND_COUNT,
   active: 19_792,
@@ -185,17 +188,45 @@ export function generateDemoBands(count: number, startId = 1): SafetyBand[] {
   return Array.from({ length: count }, (_, index) => generateDemoBand(startId + index));
 }
 
-function twinSampleIds() {
+function twinSampleIds(count: number) {
   const priority = [7, 42, 55, 84, 118, 173, 211, 244, 298, 555];
   const ids = new Set(priority);
-  const step = DEMO_BAND_COUNT / (TWIN_RENDER_BAND_COUNT - priority.length);
-  for (let index = 0; ids.size < TWIN_RENDER_BAND_COUNT; index += 1) {
+  const step = DEMO_BAND_COUNT / (count - priority.length);
+  for (let index = 0; ids.size < count; index += 1) {
     ids.add(Math.min(DEMO_BAND_COUNT, Math.max(1, Math.round(1 + index * step))));
   }
-  return [...ids].toSorted((a, b) => a - b).slice(0, TWIN_RENDER_BAND_COUNT);
+  return [...ids].toSorted((a, b) => a - b).slice(0, count);
 }
 
-export const TWIN_RENDER_BANDS = twinSampleIds().map(generateDemoBand);
+export const TWIN_RENDER_BANDS = twinSampleIds(TWIN_RENDER_BAND_COUNT).map(generateDemoBand);
+let twinMapBands: TwinMapBand[] | null = null;
+
+function generateTwinMapBand(id: number): TwinMapBand {
+  const index = id - 1;
+  const zone = BAND_ZONES[index % BAND_ZONES.length];
+  const segment = Math.floor(index / BAND_ZONES.length) % ZONE_SEGMENT_COUNTS[zone];
+  const offline = id % 97 === 0 || id === 118 || id === 244;
+  const sos = id === 7 || id % 173 === 0;
+  const distressed = id === 42 || id % 149 === 0;
+  const elevated = id % 37 === 0 || id === 55 || id === 219;
+  const status: BandStatus = offline ? "OFFLINE" : sos ? "SOS" : distressed ? "DISTRESSED" : elevated ? "ELEVATED" : "NORMAL";
+  const dot = dotFor(id, zone, segment);
+  return {
+    id,
+    code: `WB-${String(id).padStart(5, "0")}`,
+    zone,
+    status,
+    sos,
+    riskScore: sos ? 100 : distressed ? 88 : elevated ? 58 : 12 + Math.round(seeded(id, 11) * 24),
+    dotPositionX: dot.x,
+    dotPositionY: dot.y,
+  };
+}
+
+export function getTwinMapBands() {
+  if (!twinMapBands) twinMapBands = twinSampleIds(TWIN_MAP_BAND_COUNT).map(generateTwinMapBand);
+  return twinMapBands;
+}
 
 let registryCatalog: BandRegistryRecord[] | null = null;
 

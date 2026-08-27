@@ -5,15 +5,16 @@ import {
   Activity, Camera, ChevronRight, DoorOpen, Eye, EyeOff, FilterX, Layers3,
   LocateFixed, Minus, Pause, Play, Plus, Search, ShieldCheck, Siren, UsersRound, Watch,
 } from "lucide-react";
-import { useDeferredValue, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useDeferredValue, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import { StadiumTwin } from "@/components/command-center-dashboard";
 import { useDemoOperations } from "@/components/demo-operations-context";
 import { OperationsHeader } from "@/components/operations-header";
-import { BAND_ZONES, DEMO_BAND_COUNT, DEMO_BAND_SUMMARY, TWIN_RENDER_BANDS, ZONE_SEGMENT_COUNTS, generateDemoBand, type BandStatus, type SafetyBand } from "@/lib/bands";
+import { BAND_ZONES, DEMO_BAND_COUNT, DEMO_BAND_SUMMARY, TWIN_RENDER_BANDS, ZONE_SEGMENT_COUNTS, generateDemoBand, getTwinMapBands, type BandStatus, type SafetyBand } from "@/lib/bands";
 import { getDigitalTwinSnapshot, levelFor, overallRisk, type Zone } from "@/lib/mghsis-demo";
 
 type RailView = "BANDS" | "ZONES";
 type StatusFilter = "ALL" | BandStatus;
+const subscribeToBrowser = () => () => undefined;
 type TwinSimulationState = {
   scenario: string;
   running: boolean;
@@ -86,6 +87,8 @@ function ZoneRail({ zones, bands, totalBands, selectedZone, onSelect }: { zones:
 
 export function DigitalTwinOperations() {
   const { scenario } = useDemoOperations();
+  const isBrowser = useSyncExternalStore(subscribeToBrowser, () => true, () => false);
+  const mapBandSample = useMemo(() => isBrowser ? getTwinMapBands() : [], [isBrowser]);
   const { zones, totals } = getDigitalTwinSnapshot(scenario);
   const summary = DEMO_BAND_SUMMARY;
   const [railView, setRailView] = useState<RailView>("BANDS");
@@ -136,8 +139,15 @@ export function DigitalTwinOperations() {
     if (distressOnly && band.status !== "DISTRESSED" && band.status !== "SOS") return false;
     return true;
   }), [deferredQuery, distressOnly, statusFilter, twinBandSample, zoneFilter]);
+  const visibleMapBands = useMemo(() => mapBandSample.filter((band) => {
+    if (deferredQuery && !band.code.toLowerCase().includes(deferredQuery) && !String(band.id).includes(deferredQuery)) return false;
+    if (zoneFilter !== "ALL" && band.zone !== zoneFilter) return false;
+    if (statusFilter !== "ALL" && band.status !== statusFilter) return false;
+    if (distressOnly && band.status !== "DISTRESSED" && band.status !== "SOS") return false;
+    return true;
+  }), [deferredQuery, distressOnly, mapBandSample, statusFilter, zoneFilter]);
   const railBands = useMemo(() => visibleBands.toSorted((a, b) => b.riskScore - a.riskScore || a.id - b.id).slice(0, 40), [visibleBands]);
-  const selectedBand = selectedBandId === null ? null : twinBandSample.find((band) => band.id === selectedBandId) ?? null;
+  const selectedBand = selectedBandId === null ? null : generateDemoBand(selectedBandId);
   const zone = displayZones.find((item) => item.id === selectedZone) ?? displayZones[0];
   const clearFilters = () => { setQuery(""); setZoneFilter("ALL"); setStatusFilter("ALL"); setDistressOnly(false); };
   const runSimulationCommand = async (body: Record<string, string>) => {
@@ -173,10 +183,10 @@ export function DigitalTwinOperations() {
           </div>
         </div>
         <div className="twin-ops-map-stage">
-          <StadiumTwin zones={displayZones} selectedZone={selectedZone} onSelect={(id) => { setSelectedZone(id); setSelectedBandId(null); }} zoom={zoom} bands={showBands ? visibleBands : []} selectedBand={selectedBandId} onSelectBand={(id) => { const band = twinBandSample.find((item) => item.id === id); setSelectedBandId(id); if (band) setSelectedZone(band.zone); }} showHeatmap={showHeatmap} showGates={showGates} showCameras={showCameras} movementScenario={twinTab === "VIRTUALISATION" ? simulation?.scenario : undefined} movementTick={simulation?.tick ?? 0} movementRunning={Boolean(simulation?.running)} />
+          <StadiumTwin zones={displayZones} selectedZone={selectedZone} onSelect={(id) => { setSelectedZone(id); setSelectedBandId(null); }} zoom={zoom} bands={showBands ? visibleMapBands : []} selectedBand={selectedBandId} onSelectBand={(id) => { const band = mapBandSample.find((item) => item.id === id); setSelectedBandId(id); if (band) setSelectedZone(band.zone); }} showHeatmap={showHeatmap} showGates={showGates} showCameras={showCameras} movementScenario={twinTab === "VIRTUALISATION" ? simulation?.scenario : undefined} movementTick={simulation?.tick ?? 0} movementRunning={Boolean(simulation?.running)} />
         </div>
         {twinTab === "VIRTUALISATION" ? <DigitalTwinVirtualisation state={simulation} busy={simulationBusy} error={simulationError} onCommand={runSimulationCommand} /> : null}
-        <div className="twin-map-legend"><span><i className="normal" />Normal</span><span><i className="elevated" />Elevated</span><span><i className="distressed" />Distressed</span><span><i className="offline" />Offline</span><span><i className="sos" />SOS</span><b>{showBands ? visibleBands.length.toLocaleString() : 0} visual sample / {DEMO_BAND_COUNT.toLocaleString()} tracked</b></div>
+        <div className="twin-map-legend"><span><i className="normal" />Normal</span><span><i className="elevated" />Elevated</span><span><i className="distressed" />Distressed</span><span><i className="offline" />Offline</span><span><i className="sos" />SOS</span><b>{showBands ? visibleMapBands.length.toLocaleString() : 0} visual sample / {DEMO_BAND_COUNT.toLocaleString()} tracked</b></div>
       </section>
 
       <aside className="twin-live-rail">
