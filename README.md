@@ -14,7 +14,7 @@ This repository has been bootstrapped from `MASTER.md` and includes:
 - `packages/*`, `infra/*`, `docs/*`: monorepo structure from the source-of-truth document.
 - `docker-compose.yml`: local PostgreSQL, Redis, API, and web service wiring.
 
-The UI uses the uploaded cricket stadium seating reference to model block-level heatmap zones, 1,200 deterministic Smart Safety Bands distributed across every visual stadium segment, and explainable demo risk. The backend trains and serves a crowd-risk classifier from a reproducible 100,000-row synthetic corpus (80,000 train / 20,000 holdout). It does not claim medical diagnosis, facial recognition, exact GPS tracking, or completed physical hardware integration.
+The UI uses the uploaded cricket stadium seating reference to model block-level heatmap zones, a server-paginated catalogue of 20,000 deterministic Smart Safety Bands, a bounded 1,200-track Digital Twin sample, and explainable demo risk. The backend trains and serves a crowd-risk classifier from a reproducible 100,000-row synthetic corpus (80,000 train / 20,000 holdout). It does not claim medical diagnosis, facial recognition, exact GPS tracking, or completed physical hardware integration.
 
 ## Quick Start
 
@@ -63,7 +63,7 @@ Recommended local ports from `MASTER.md`:
 
 ## Demo Scenarios
 
-The current command centre includes deterministic frontend scenario controls and a live 1,200-band map layer:
+The current command centre includes deterministic frontend scenario controls, 20,000 tracked event bands, and a performance-bounded 1,200-track map layer:
 
 - Human distress in a stadium block
 - Crowd congestion

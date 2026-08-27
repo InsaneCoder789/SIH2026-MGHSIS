@@ -5,12 +5,12 @@ import {
   Watch, Workflow,
 } from "lucide-react";
 import { OperationsHeader } from "@/components/operations-header";
-import { DEMO_BANDS, summarizeBands } from "@/lib/bands";
+import { DEMO_BAND_COUNT, DEMO_BAND_SUMMARY, TWIN_RENDER_BANDS } from "@/lib/bands";
 
 const modules = [
   { title: "Command Centre", description: "Live venue Digital Twin, zone heat, alerts and interventions.", icon: RadioTower, metric: "12 active alerts", href: "/command-center", tone: "teal" },
-  { title: "Dedicated Digital Twin", description: "Full venue view with 1,200 live bands, segment heat and zone intelligence.", icon: RadioTower, metric: `${DEMO_BANDS.length.toLocaleString()} live dots`, href: "/digital-twin", tone: "teal" },
-  { title: "Band Registry", description: "Trace every registered Smart Safety Band and its risk state.", icon: Watch, metric: `${DEMO_BANDS.length.toLocaleString()} registered`, href: "/bands", tone: "blue" },
+  { title: "Dedicated Digital Twin", description: "Full venue view with a performant live sample, segment heat and zone intelligence.", icon: RadioTower, metric: `${DEMO_BAND_COUNT.toLocaleString()} tracked`, href: "/digital-twin", tone: "teal" },
+  { title: "Band Registry", description: "Trace every registered Smart Safety Band and its risk state.", icon: Watch, metric: `${DEMO_BAND_COUNT.toLocaleString()} registered`, href: "/bands", tone: "blue" },
   { title: "Live Alerts & Incidents", description: "Triage Human, Crowd and Population Integrity alerts.", icon: Siren, metric: "3 critical", href: "/alerts", tone: "red" },
   { title: "Risk Analytics", description: "Compare risk history, zone trends and response effectiveness.", icon: BarChart3, metric: "7 zones elevated", href: "/analytics", tone: "orange" },
   { title: "CCTV & Zone Monitoring", description: "Inspect mapped feeds, observed counts and confidence.", icon: Camera, metric: "10 / 12 online", href: "/cctv", tone: "green" },
@@ -28,8 +28,8 @@ const incidents = [
 ];
 
 export default function HomePage() {
-  const summary = summarizeBands();
-  const priorityBands = DEMO_BANDS.filter((band) => band.status === "SOS" || band.status === "DISTRESSED").slice(0, 4);
+  const summary = DEMO_BAND_SUMMARY;
+  const priorityBands = TWIN_RENDER_BANDS.filter((band) => band.status === "SOS" || band.status === "DISTRESSED").slice(0, 4);
 
   return (
     <main className="portal-page">

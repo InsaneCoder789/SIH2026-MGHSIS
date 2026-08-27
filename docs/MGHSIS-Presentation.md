@@ -47,7 +47,7 @@ strategies to be rehearsed before they are used during a real event.
 **MGHSIS creates a live, explainable safety Digital Twin for mass gatherings.**
 
 - Maps a cricket stadium into **17 operational zones** and detailed segments.
-- Tracks **1,200 event-scoped safety bands** and their latest status.
+- Tracks **20,000 event-scoped safety bands** through a paginated catalogue, with a bounded representative layer on the Digital Twin.
 - Combines density, flow, distress, gate, weather, and infrastructure signals.
 - Classifies each zone as **Low, Moderate, High, or Critical** risk.
 - Shows risk scores, trends, contributing factors, alerts, and recommended actions.
@@ -142,7 +142,7 @@ independent safety review.
 ### Feasibility of the idea
 
 - A working Next.js interface and FastAPI inference service already exist.
-- The twin models 17 zones, venue segments, gates, premium tiers, and 1,200 bands.
+- The twin models 17 zones, venue segments, gates, premium tiers, and a 20,000-band event catalogue.
 - Live Twin and Virtualisation use the same spatial model and risk language.
 - Alerts support acknowledge/resolve; interventions support approve/reject/verify.
 - Observations use source identities, timestamps, and sequence validation.

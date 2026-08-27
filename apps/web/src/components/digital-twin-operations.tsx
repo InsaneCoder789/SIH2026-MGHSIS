@@ -9,7 +9,7 @@ import { useDeferredValue, useEffect, useMemo, useState, type ReactNode } from "
 import { StadiumTwin } from "@/components/command-center-dashboard";
 import { useDemoOperations } from "@/components/demo-operations-context";
 import { OperationsHeader } from "@/components/operations-header";
-import { BAND_ZONES, DEMO_BANDS, ZONE_SEGMENT_COUNTS, summarizeBands, type BandStatus, type SafetyBand } from "@/lib/bands";
+import { BAND_ZONES, DEMO_BAND_COUNT, DEMO_BAND_SUMMARY, TWIN_RENDER_BANDS, ZONE_SEGMENT_COUNTS, generateDemoBand, type BandStatus, type SafetyBand } from "@/lib/bands";
 import { getDigitalTwinSnapshot, levelFor, overallRisk, type Zone } from "@/lib/mghsis-demo";
 
 type RailView = "BANDS" | "ZONES";
@@ -29,9 +29,20 @@ async function simulationCommand(body: Record<string, string>) {
   return response.json() as Promise<TwinSimulationState>;
 }
 
-function DigitalTwinVirtualisation({ state, onCommand }: { state: TwinSimulationState | null; onCommand: (body: Record<string, string>) => void }) {
+function DigitalTwinVirtualisation({ state, busy, error, onCommand }: { state: TwinSimulationState | null; busy: boolean; error: string; onCommand: (body: Record<string, string>) => void }) {
   const highest = state?.zones.toSorted((a, b) => b.prediction.score - a.prediction.score).slice(0, 4) ?? [];
-  return <section className="digital-twin-virtualisation"><header><div><p className="eyebrow">Scenario Projection On Twin</p><h2>{state?.scenario?.replaceAll("_", " ") ?? "Connecting"}</h2></div><span>{state?.running ? "RUNNING" : "PAUSED"}</span></header><div className="virtualisation-scenarios"><button onClick={() => onCommand({ command: "scenario", scenario: "congestion" })}>Congestion</button><button onClick={() => onCommand({ command: "scenario", scenario: "distress" })}>Distress</button><button onClick={() => onCommand({ command: "scenario", scenario: "breach" })}>Breach</button><button onClick={() => onCommand({ command: "scenario", scenario: "gateway" })}>Gateway</button></div><div className="virtualisation-summary"><div><small>Virtual tick</small><strong>{state?.tick ?? "--"}</strong></div><div><small>Peak score</small><strong>{state?.aggregate.peak_score.toFixed(1) ?? "--"}</strong></div><div><small>High+</small><strong>{state?.aggregate.high_or_above ?? "--"}</strong></div><div><small>Critical</small><strong>{state?.aggregate.critical_zones ?? "--"}</strong></div></div><div className="virtualisation-zones">{highest.map((item) => <article key={item.prediction.zone_id}><div><b>{item.prediction.zone_id}</b><span>{item.prediction.level} / {item.prediction.trend}</span></div><i><em className={item.prediction.level.toLowerCase()} style={{ width: `${Math.min(100, item.prediction.score)}%` }} /></i><strong>{item.prediction.score.toFixed(0)}</strong></article>)}</div><footer><button onClick={() => onCommand({ command: state?.running ? "pause" : "start" })}>{state?.running ? <Pause size={13} /> : <Play size={13} />}{state?.running ? "Pause" : "Run"}</button><button onClick={() => onCommand({ command: "action", action: "REDIRECT_TO_ZONE", zone_id: "G" })}><LocateFixed size={13} />Redirect G</button><button onClick={() => onCommand({ command: "reset" })}>Reset</button></footer></section>;
+  const scenario = state?.scenario ?? "normal";
+  return <section className={`digital-twin-virtualisation scenario-${scenario}`}>
+    <header><div><p className="eyebrow">Scenario Projection On Twin</p><h2>{scenario.replaceAll("_", " ")}</h2></div><span className={state?.running ? "running" : ""}>{busy ? "UPDATING" : state?.running ? "RUNNING" : "PAUSED"}</span></header>
+    <div className="virtualisation-scenarios">
+      {["congestion", "distress", "breach", "gateway"].map((item) => <button key={item} className={scenario === item ? "active" : ""} disabled={busy} onClick={() => onCommand({ command: "scenario", scenario: item })}>{item}</button>)}
+    </div>
+    <div className="virtualisation-process" aria-label="Virtualisation processing stages"><span className={state ? "complete" : "active"}>Observe</span><i /><span className={state ? "complete" : ""}>Predict</span><i /><span className={state ? "active" : ""}>Project</span><i /><span className={state?.active_action ? "complete" : ""}>Respond</span></div>
+    <div className="virtualisation-summary"><div><small>Virtual tick</small><strong>{state?.tick ?? "--"}</strong></div><div><small>Peak score</small><strong>{state ? state.aggregate.peak_score.toFixed(1) : "--"}</strong></div><div><small>High+</small><strong>{state?.aggregate.high_or_above ?? "--"}</strong></div><div><small>Critical</small><strong>{state?.aggregate.critical_zones ?? "--"}</strong></div></div>
+    <div className="virtualisation-zones">{highest.map((item) => <article key={item.prediction.zone_id}><div><b>{item.prediction.zone_id}</b><span>{item.prediction.level} / {item.prediction.trend}</span></div><i><em className={item.prediction.level.toLowerCase()} style={{ width: `${Math.min(100, item.prediction.score)}%` }} /></i><strong>{item.prediction.score.toFixed(0)}</strong></article>)}</div>
+    {error ? <p className="virtualisation-error">{error}</p> : <p className="virtualisation-movement"><Activity size={12} />{state?.running ? "Movement layer advances with every virtual tick" : "Run the clock to animate projected crowd flow"}</p>}
+    <footer><button disabled={busy || !state} onClick={() => onCommand({ command: state?.running ? "pause" : "start" })}>{state?.running ? <Pause size={13} /> : <Play size={13} />}{state?.running ? "Pause" : "Run"}</button><button disabled={busy || !state} onClick={() => onCommand({ command: "action", action: "REDIRECT_TO_ZONE", zone_id: "G" })}><LocateFixed size={13} />Redirect G</button><button disabled={busy || !state} onClick={() => onCommand({ command: "reset" })}>Reset</button></footer>
+  </section>;
 }
 
 function LayerButton({ active, label, title, danger, onClick, children }: { active: boolean; label: string; title: string; danger?: boolean; onClick: () => void; children: ReactNode }) {
@@ -46,27 +57,29 @@ function SelectedBandPanel({ band }: { band: SafetyBand }) {
   </section>;
 }
 
-function SegmentDistribution({ zone, bands }: { zone: Zone; bands: SafetyBand[] }) {
+function SegmentDistribution({ zone, bands, totalBands }: { zone: Zone; bands: SafetyBand[]; totalBands: number }) {
+  const scale = totalBands / bands.length;
   const segments = Array.from({ length: ZONE_SEGMENT_COUNTS[zone.id as keyof typeof ZONE_SEGMENT_COUNTS] ?? 1 }, (_, index) => {
     const segmentBands = bands.filter((band) => band.zone === zone.id && band.segment === index + 1);
     return {
       id: index + 1,
-      count: segmentBands.length,
-      distressed: segmentBands.filter((band) => band.status === "DISTRESSED" || band.status === "SOS").length,
-      elevated: segmentBands.filter((band) => band.status === "ELEVATED").length,
+      count: Math.round(segmentBands.length * scale),
+      distressed: Math.round(segmentBands.filter((band) => band.status === "DISTRESSED" || band.status === "SOS").length * scale),
+      elevated: Math.round(segmentBands.filter((band) => band.status === "ELEVATED").length * scale),
     };
   });
   const max = Math.max(1, ...segments.map((segment) => segment.count));
   return <section className="segment-distribution"><header><span>Zone {zone.id} segment population</span><strong>{segments.reduce((sum, segment) => sum + segment.count, 0)} bands</strong></header><div>{segments.map((segment) => <article key={segment.id} className={segment.distressed ? "danger" : segment.elevated ? "elevated" : ""}><span>S{segment.id}</span><i><b style={{ height: `${Math.max(12, (segment.count / max) * 100)}%` }} /></i><strong>{segment.count}</strong><small>{segment.distressed ? `${segment.distressed} risk` : "stable"}</small></article>)}</div></section>;
 }
 
-function ZoneRail({ zones, bands, selectedZone, onSelect }: { zones: Zone[]; bands: SafetyBand[]; selectedZone: string; onSelect: (zone: string) => void }) {
+function ZoneRail({ zones, bands, totalBands, selectedZone, onSelect }: { zones: Zone[]; bands: SafetyBand[]; totalBands: number; selectedZone: string; onSelect: (zone: string) => void }) {
+  const scale = totalBands / bands.length;
   return <div className="twin-zone-list">{zones.toSorted((a, b) => overallRisk(b) - overallRisk(a)).map((zone) => {
     const score = overallRisk(zone);
     const zoneBands = bands.filter((band) => band.zone === zone.id);
-    const distressed = zoneBands.filter((band) => band.status === "DISTRESSED" || band.status === "SOS").length;
+    const distressed = Math.round(zoneBands.filter((band) => band.status === "DISTRESSED" || band.status === "SOS").length * scale);
     return <button key={zone.id} className={`${selectedZone === zone.id ? "selected" : ""} ${levelFor(score)}`} onClick={() => onSelect(zone.id)}>
-      <b>{zone.id}</b><div><strong>{zone.label}</strong><span>{zoneBands.length} bands / {distressed} distressed</span></div><i><span style={{ width: `${Math.min(100, score)}%` }} /></i><em>{score}</em>
+      <b>{zone.id}</b><div><strong>{zone.label}</strong><span>{Math.round(zoneBands.length * scale).toLocaleString()} bands / {distressed} distressed</span></div><i><span style={{ width: `${Math.min(100, score)}%` }} /></i><em>{score}</em>
     </button>;
   })}</div>;
 }
@@ -74,7 +87,7 @@ function ZoneRail({ zones, bands, selectedZone, onSelect }: { zones: Zone[]; ban
 export function DigitalTwinOperations() {
   const { scenario } = useDemoOperations();
   const { zones, totals } = getDigitalTwinSnapshot(scenario);
-  const summary = summarizeBands();
+  const summary = DEMO_BAND_SUMMARY;
   const [railView, setRailView] = useState<RailView>("BANDS");
   const [selectedZone, setSelectedZone] = useState("G");
   const [zoneFilter, setZoneFilter] = useState("ALL");
@@ -90,6 +103,8 @@ export function DigitalTwinOperations() {
   const [distressOnly, setDistressOnly] = useState(false);
   const [twinTab, setTwinTab] = useState<"LIVE" | "VIRTUALISATION">("LIVE");
   const [simulation, setSimulation] = useState<TwinSimulationState | null>(null);
+  const [simulationBusy, setSimulationBusy] = useState(false);
+  const [simulationError, setSimulationError] = useState("");
 
   useEffect(() => {
     if (twinTab !== "VIRTUALISATION") return;
@@ -97,7 +112,7 @@ export function DigitalTwinOperations() {
     const load = () => {
       if (inFlight.current) return;
       inFlight.current = true;
-      fetch("/api/simulation", { cache: "no-store" }).then((response) => response.ok ? response.json() : Promise.reject()).then((payload: TwinSimulationState) => setSimulation(payload)).catch(() => undefined).finally(() => { inFlight.current = false; });
+      fetch("/api/simulation", { cache: "no-store" }).then((response) => response.ok ? response.json() : Promise.reject()).then((payload: TwinSimulationState) => { setSimulation(payload); setSimulationError(""); }).catch(() => setSimulationError("Simulation service is offline. Start the FastAPI service and retry.")).finally(() => { inFlight.current = false; });
     };
     load();
     const timer = window.setInterval(load, 2500);
@@ -109,17 +124,29 @@ export function DigitalTwinOperations() {
   });
   const displayZones = twinTab === "VIRTUALISATION" ? virtualZones : zones;
 
-  const visibleBands = useMemo(() => DEMO_BANDS.filter((band) => {
+  const searchedBand = useMemo(() => {
+    const parsed = Number(deferredQuery.replace(/^wb-/i, ""));
+    return deferredQuery && Number.isInteger(parsed) && parsed >= 1 && parsed <= DEMO_BAND_COUNT && !TWIN_RENDER_BANDS.some((band) => band.id === parsed) ? generateDemoBand(parsed) : null;
+  }, [deferredQuery]);
+  const twinBandSample = useMemo(() => searchedBand ? [searchedBand, ...TWIN_RENDER_BANDS] : TWIN_RENDER_BANDS, [searchedBand]);
+  const visibleBands = useMemo(() => twinBandSample.filter((band) => {
     if (deferredQuery && !band.code.toLowerCase().includes(deferredQuery) && !String(band.id).includes(deferredQuery)) return false;
     if (zoneFilter !== "ALL" && band.zone !== zoneFilter) return false;
     if (statusFilter !== "ALL" && band.status !== statusFilter) return false;
     if (distressOnly && band.status !== "DISTRESSED" && band.status !== "SOS") return false;
     return true;
-  }), [deferredQuery, distressOnly, statusFilter, zoneFilter]);
+  }), [deferredQuery, distressOnly, statusFilter, twinBandSample, zoneFilter]);
   const railBands = useMemo(() => visibleBands.toSorted((a, b) => b.riskScore - a.riskScore || a.id - b.id).slice(0, 40), [visibleBands]);
-  const selectedBand = selectedBandId === null ? null : DEMO_BANDS.find((band) => band.id === selectedBandId) ?? null;
+  const selectedBand = selectedBandId === null ? null : twinBandSample.find((band) => band.id === selectedBandId) ?? null;
   const zone = displayZones.find((item) => item.id === selectedZone) ?? displayZones[0];
   const clearFilters = () => { setQuery(""); setZoneFilter("ALL"); setStatusFilter("ALL"); setDistressOnly(false); };
+  const runSimulationCommand = async (body: Record<string, string>) => {
+    setSimulationBusy(true);
+    setSimulationError("");
+    try { setSimulation(await simulationCommand(body)); }
+    catch { setSimulationError("The simulation command failed. Check the backend connection and retry."); }
+    finally { setSimulationBusy(false); }
+  };
 
   return <main className="twin-ops-page">
     <OperationsHeader section="Digital Twin" />
@@ -146,10 +173,10 @@ export function DigitalTwinOperations() {
           </div>
         </div>
         <div className="twin-ops-map-stage">
-          <StadiumTwin zones={displayZones} selectedZone={selectedZone} onSelect={(id) => { setSelectedZone(id); setSelectedBandId(null); }} zoom={zoom} bands={showBands ? visibleBands : []} selectedBand={selectedBandId} onSelectBand={(id) => { const band = DEMO_BANDS.find((item) => item.id === id); setSelectedBandId(id); if (band) setSelectedZone(band.zone); }} showHeatmap={showHeatmap} showGates={showGates} showCameras={showCameras} />
+          <StadiumTwin zones={displayZones} selectedZone={selectedZone} onSelect={(id) => { setSelectedZone(id); setSelectedBandId(null); }} zoom={zoom} bands={showBands ? visibleBands : []} selectedBand={selectedBandId} onSelectBand={(id) => { const band = twinBandSample.find((item) => item.id === id); setSelectedBandId(id); if (band) setSelectedZone(band.zone); }} showHeatmap={showHeatmap} showGates={showGates} showCameras={showCameras} movementScenario={twinTab === "VIRTUALISATION" ? simulation?.scenario : undefined} movementTick={simulation?.tick ?? 0} movementRunning={Boolean(simulation?.running)} />
         </div>
-        {twinTab === "VIRTUALISATION" ? <DigitalTwinVirtualisation state={simulation} onCommand={(body) => simulationCommand(body).then(setSimulation).catch(() => undefined)} /> : null}
-        <div className="twin-map-legend"><span><i className="normal" />Normal</span><span><i className="elevated" />Elevated</span><span><i className="distressed" />Distressed</span><span><i className="offline" />Offline</span><span><i className="sos" />SOS</span><b>{showBands ? visibleBands.length.toLocaleString() : 0} rendered</b></div>
+        {twinTab === "VIRTUALISATION" ? <DigitalTwinVirtualisation state={simulation} busy={simulationBusy} error={simulationError} onCommand={runSimulationCommand} /> : null}
+        <div className="twin-map-legend"><span><i className="normal" />Normal</span><span><i className="elevated" />Elevated</span><span><i className="distressed" />Distressed</span><span><i className="offline" />Offline</span><span><i className="sos" />SOS</span><b>{showBands ? visibleBands.length.toLocaleString() : 0} visual sample / {DEMO_BAND_COUNT.toLocaleString()} tracked</b></div>
       </section>
 
       <aside className="twin-live-rail">
@@ -163,9 +190,9 @@ export function DigitalTwinOperations() {
         </div>
 
         {selectedBand ? <SelectedBandPanel band={selectedBand} /> : <section className="twin-selected-zone"><span>Selected Zone</span><strong>{zone.label}</strong><small>{zone.observed.toLocaleString()} observed / risk {overallRisk(zone)}</small></section>}
-        <SegmentDistribution zone={zone} bands={DEMO_BANDS} />
+        <SegmentDistribution zone={zone} bands={TWIN_RENDER_BANDS} totalBands={DEMO_BAND_COUNT} />
 
-        {railView === "BANDS" ? <div className="twin-band-list"><header><span>Highest risk first</span><strong>{visibleBands.length.toLocaleString()} matching</strong></header>{railBands.map((band) => <button key={band.id} className={`${band.status.toLowerCase()} ${selectedBandId === band.id ? "selected" : ""}`} onClick={() => { setSelectedBandId(band.id); setSelectedZone(band.zone); }}><i /><div><strong>{band.code}</strong><span>Zone {band.zone} / S{band.segment} / {band.connectivity}</span></div><div><strong>{band.hr}</strong><span>BPM</span></div><div><strong>{band.spo2}%</strong><span>SpO2</span></div><b>{band.riskScore}<small>{band.status}</small></b></button>)}</div> : <ZoneRail zones={zones} bands={DEMO_BANDS} selectedZone={selectedZone} onSelect={(id) => { setSelectedZone(id); setZoneFilter(id); setSelectedBandId(null); }} />}
+        {railView === "BANDS" ? <div className="twin-band-list"><header><span>Highest risk sample</span><strong>{visibleBands.length.toLocaleString()} visible / {DEMO_BAND_COUNT.toLocaleString()} tracked</strong></header>{railBands.map((band) => <button key={band.id} className={`${band.status.toLowerCase()} ${selectedBandId === band.id ? "selected" : ""}`} onClick={() => { setSelectedBandId(band.id); setSelectedZone(band.zone); }}><i /><div><strong>{band.code}</strong><span>Zone {band.zone} / S{band.segment} / {band.connectivity}</span></div><div><strong>{band.hr}</strong><span>BPM</span></div><div><strong>{band.spo2}%</strong><span>SpO2</span></div><b>{band.riskScore}<small>{band.status}</small></b></button>)}</div> : <ZoneRail zones={zones} bands={TWIN_RENDER_BANDS} totalBands={DEMO_BAND_COUNT} selectedZone={selectedZone} onSelect={(id) => { setSelectedZone(id); setZoneFilter(id); setSelectedBandId(null); }} />}
       </aside>
     </div>
   </main>;

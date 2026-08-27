@@ -78,7 +78,7 @@ export const INITIAL_INTERVENTIONS: OperationalIntervention[] = [
 ];
 
 export const INITIAL_TIMELINE: TimelineRecord[] = [
-  { id: "EV-001", time: "20:34:18", type: "SYSTEM", title: "Digital Twin synchronized", detail: "1,200 band states and 17 zone aggregates committed.", zone: "ALL" },
+  { id: "EV-001", time: "20:34:18", type: "SYSTEM", title: "Digital Twin synchronized", detail: "20,000 band states and 17 zone aggregates committed; 1,200 representative tracks rendered.", zone: "ALL" },
   { id: "EV-002", time: "20:34:05", type: "ALERT", title: "Congestion detected", detail: "Block G risk crossed the critical threshold.", zone: "G", severity: "critical" },
   { id: "EV-003", time: "20:33:59", type: "ALERT", title: "Population mismatch", detail: "Observed population diverged from authenticated count near Gate G8.", zone: "H", severity: "high" },
   { id: "EV-004", time: "20:33:41", type: "ALERT", title: "Human Risk alert", detail: "WB-042 produced fall, immobility, and low SpO2 demo signals.", zone: "C", severity: "critical" },

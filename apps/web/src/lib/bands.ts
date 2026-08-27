@@ -37,8 +37,30 @@ export type SafetyBand = {
   };
 };
 
+export type BandRegistryRecord = Omit<SafetyBand, "risk" | "history" | "dotPositionX" | "dotPositionY">;
+
+export type BandPopulationSummary = {
+  total: number;
+  active: number;
+  distressed: number;
+  elevated: number;
+  offline: number;
+  lowBattery: number;
+  sos: number;
+};
+
 export const BAND_ZONES = ["M", "N", "P", "Q", "R", "J", "K", "C", "D", "E", "F", "G", "H", "B", "SPW", "SPC", "SPE"] as const;
-export const DEMO_BAND_COUNT = 1200;
+export const DEMO_BAND_COUNT = 20_000;
+export const TWIN_RENDER_BAND_COUNT = 1_200;
+export const DEMO_BAND_SUMMARY: BandPopulationSummary = {
+  total: DEMO_BAND_COUNT,
+  active: 19_792,
+  distressed: 134,
+  elevated: 2,
+  offline: 208,
+  lowBattery: 377,
+  sos: 116,
+};
 
 export const ZONE_SEGMENT_COUNTS: Record<(typeof BAND_ZONES)[number], number> = {
   M: 6, N: 7, P: 6, Q: 6, R: 6, J: 6, K: 5,
@@ -89,72 +111,105 @@ function statusFor(connectivity: BandConnectivity, riskLevel: HumanRiskLevel, so
   return "NORMAL";
 }
 
-export function generateDemoBands(count = DEMO_BAND_COUNT): SafetyBand[] {
-  return Array.from({ length: count }, (_, index) => {
-    const id = index + 1;
-    const zone = BAND_ZONES[index % BAND_ZONES.length];
-    const zoneSequence = Math.floor(index / BAND_ZONES.length);
-    const segment = zoneSequence % ZONE_SEGMENT_COUNTS[zone];
-    const isOffline = id % 97 === 0 || id === 118 || id === 244;
-    const sos = id === 7 || id % 173 === 0;
-    const fallDetected = id === 42 || id % 149 === 0;
-    const immobile = fallDetected || id === 84 || id === 231 || id % 211 === 0;
-    const elevated = id % 37 === 0 || id === 55 || id === 219;
-    const hr = sos ? 138 : fallDetected ? 132 : elevated ? 116 : 68 + Math.round(seeded(id, 4) * 34);
-    const spo2 = fallDetected ? 88 : sos ? 91 : elevated ? 94 : 96 + Math.round(seeded(id, 5) * 3);
-    const signalQuality = isOffline ? 0.18 : Number((0.68 + seeded(id, 6) * 0.31).toFixed(2));
-    const connectivity: BandConnectivity = isOffline ? "OFFLINE" : signalQuality < 0.76 ? "DEGRADED" : "ONLINE";
-    const connectivityReliability = isOffline ? 0.15 : connectivity === "DEGRADED" ? 0.72 : 0.97;
-    const persistenceMinutes = sos || fallDetected ? 5 : elevated ? 3 : 1;
-    const battery = id % 53 === 0 ? 8 + (id % 9) : 38 + Math.round(seeded(id, 8) * 61);
-    const motionState: MotionState = immobile ? "IMMOBILE" : id % 5 === 0 ? "STATIONARY" : id % 2 === 0 ? "WALKING" : "ACTIVE";
-    const timestamp = `2026-08-26T20:${String(34 - (id % 5)).padStart(2, "0")}:${String(10 + (id % 49)).padStart(2, "0")}+05:30`;
-    const risk = calculateHumanRisk({ hr, spo2, fallDetected, immobile, sos, persistenceMinutes, signalQuality, connectivityReliability }, timestamp);
-    const dot = dotFor(id, zone, segment);
-
-    return {
-      id,
-      code: `WB-${String(id).padStart(3, "0")}`,
-      eventId: "gt-vs-dc-ipl-2025",
-      eventName: "GT vs DC - IPL 2025",
-      zone,
-      segment: segment + 1,
-      status: statusFor(connectivity, risk.level, sos),
-      hr,
-      spo2,
-      motionState,
-      fallDetected,
-      immobile,
-      sos,
-      battery,
-      signalQuality,
-      connectivity,
-      connectivityReliability,
-      persistenceMinutes,
-      riskScore: risk.score,
-      riskLevel: risk.level,
-      risk,
-      lastSeen: timestamp,
-      dotPositionX: dot.x,
-      dotPositionY: dot.y,
-      history: {
-        hr: trend(hr, id, 16, 38, 170),
-        spo2: trend(spo2, id + 10, 4, 82, 100),
-        battery: Array.from({ length: 12 }, (_, point) => Math.max(1, battery + 11 - point)),
-        movement: Array.from({ length: 12 }, (_, point) => point > 7 && immobile ? "IMMOBILE" : point % 4 === 0 ? "STATIONARY" : "WALKING"),
-      },
-    };
-  });
+function bandSignals(id: number) {
+  const index = id - 1;
+  const zone = BAND_ZONES[index % BAND_ZONES.length];
+  const zoneSequence = Math.floor(index / BAND_ZONES.length);
+  const segment = zoneSequence % ZONE_SEGMENT_COUNTS[zone];
+  const isOffline = id % 97 === 0 || id === 118 || id === 244;
+  const sos = id === 7 || id % 173 === 0;
+  const fallDetected = id === 42 || id % 149 === 0;
+  const immobile = fallDetected || id === 84 || id === 231 || id % 211 === 0;
+  const elevated = id % 37 === 0 || id === 55 || id === 219;
+  const hr = sos ? 138 : fallDetected ? 132 : elevated ? 116 : 68 + Math.round(seeded(id, 4) * 34);
+  const spo2 = fallDetected ? 88 : sos ? 91 : elevated ? 94 : 96 + Math.round(seeded(id, 5) * 3);
+  const signalQuality = isOffline ? 0.18 : Number((0.68 + seeded(id, 6) * 0.31).toFixed(2));
+  const connectivity: BandConnectivity = isOffline ? "OFFLINE" : signalQuality < 0.76 ? "DEGRADED" : "ONLINE";
+  const connectivityReliability = isOffline ? 0.15 : connectivity === "DEGRADED" ? 0.72 : 0.97;
+  const persistenceMinutes = sos || fallDetected ? 5 : elevated ? 3 : 1;
+  const battery = id % 53 === 0 ? 8 + (id % 9) : 38 + Math.round(seeded(id, 8) * 61);
+  const motionState: MotionState = immobile ? "IMMOBILE" : id % 5 === 0 ? "STATIONARY" : id % 2 === 0 ? "WALKING" : "ACTIVE";
+  const timestamp = `2026-08-26T20:${String(34 - (id % 5)).padStart(2, "0")}:${String(10 + (id % 49)).padStart(2, "0")}+05:30`;
+  const risk = calculateHumanRisk({ hr, spo2, fallDetected, immobile, sos, persistenceMinutes, signalQuality, connectivityReliability }, timestamp);
+  return { id, zone, segment, connectivity, connectivityReliability, sos, fallDetected, immobile, hr, spo2, signalQuality, persistenceMinutes, battery, motionState, timestamp, risk };
 }
 
-export const DEMO_BANDS = generateDemoBands();
+function registryRecordFromSignal(id: number, signal: ReturnType<typeof bandSignals>): BandRegistryRecord {
+  return {
+    id,
+    code: `WB-${String(id).padStart(5, "0")}`,
+    eventId: "gt-vs-dc-ipl-2025",
+    eventName: "GT vs DC - IPL 2025",
+    zone: signal.zone,
+    segment: signal.segment + 1,
+    status: statusFor(signal.connectivity, signal.risk.level, signal.sos),
+    hr: signal.hr,
+    spo2: signal.spo2,
+    motionState: signal.motionState,
+    fallDetected: signal.fallDetected,
+    immobile: signal.immobile,
+    sos: signal.sos,
+    battery: signal.battery,
+    signalQuality: signal.signalQuality,
+    connectivity: signal.connectivity,
+    connectivityReliability: signal.connectivityReliability,
+    persistenceMinutes: signal.persistenceMinutes,
+    riskScore: signal.risk.score,
+    riskLevel: signal.risk.level,
+    lastSeen: signal.timestamp,
+  };
+}
+
+export function generateBandRegistryRecord(id: number): BandRegistryRecord {
+  return registryRecordFromSignal(id, bandSignals(id));
+}
+
+export function generateDemoBand(id: number): SafetyBand {
+  const signal = bandSignals(id);
+  const dot = dotFor(id, signal.zone, signal.segment);
+  return {
+    ...registryRecordFromSignal(id, signal),
+    risk: signal.risk,
+    dotPositionX: dot.x,
+    dotPositionY: dot.y,
+    history: {
+      hr: trend(signal.hr, id, 16, 38, 170),
+      spo2: trend(signal.spo2, id + 10, 4, 82, 100),
+      battery: Array.from({ length: 12 }, (_, point) => Math.max(1, signal.battery + 11 - point)),
+      movement: Array.from({ length: 12 }, (_, point) => point > 7 && signal.immobile ? "IMMOBILE" : point % 4 === 0 ? "STATIONARY" : "WALKING"),
+    },
+  };
+}
+
+export function generateDemoBands(count: number, startId = 1): SafetyBand[] {
+  return Array.from({ length: count }, (_, index) => generateDemoBand(startId + index));
+}
+
+function twinSampleIds() {
+  const priority = [7, 42, 55, 84, 118, 173, 211, 244, 298, 555];
+  const ids = new Set(priority);
+  const step = DEMO_BAND_COUNT / (TWIN_RENDER_BAND_COUNT - priority.length);
+  for (let index = 0; ids.size < TWIN_RENDER_BAND_COUNT; index += 1) {
+    ids.add(Math.min(DEMO_BAND_COUNT, Math.max(1, Math.round(1 + index * step))));
+  }
+  return [...ids].toSorted((a, b) => a - b).slice(0, TWIN_RENDER_BAND_COUNT);
+}
+
+export const TWIN_RENDER_BANDS = twinSampleIds().map(generateDemoBand);
+
+let registryCatalog: BandRegistryRecord[] | null = null;
+
+export function getBandRegistryCatalog() {
+  if (!registryCatalog) registryCatalog = Array.from({ length: DEMO_BAND_COUNT }, (_, index) => generateBandRegistryRecord(index + 1));
+  return registryCatalog;
+}
 
 export function getBandById(id: number | string) {
   const parsed = typeof id === "string" ? Number(id.replace(/^WB-/i, "")) : id;
-  return DEMO_BANDS.find((band) => band.id === parsed);
+  return Number.isInteger(parsed) && parsed >= 1 && parsed <= DEMO_BAND_COUNT ? generateDemoBand(parsed) : undefined;
 }
 
-export function summarizeBands(bands: SafetyBand[] = DEMO_BANDS) {
+export function summarizeBands(bands: Array<Pick<BandRegistryRecord, "connectivity" | "status" | "battery" | "sos">>): BandPopulationSummary {
   return {
     total: bands.length,
     active: bands.filter((band) => band.connectivity !== "OFFLINE").length,

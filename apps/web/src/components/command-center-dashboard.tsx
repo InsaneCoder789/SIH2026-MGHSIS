@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {
   Activity, AlertTriangle, CloudSun, Construction, Crosshair,
   Hand, HeartPulse, ListFilter, LocateFixed, LockKeyhole, Minus, MousePointer2,
@@ -8,7 +9,7 @@ import {
 import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { useDemoOperations } from "@/components/demo-operations-context";
 import { OperationsHeader } from "@/components/operations-header";
-import { DEMO_BANDS, type SafetyBand } from "@/lib/bands";
+import { TWIN_RENDER_BANDS, type SafetyBand } from "@/lib/bands";
 import {
   getDigitalTwinSnapshot, levelFor, scenarioNotes,
   type RiskLevel, type Scenario, type Zone,
@@ -180,7 +181,38 @@ function BowlSector({ sector, zone, selected, heatmapVisible, onSelect }: { sect
   </g>;
 }
 
-export function StadiumTwin({ zones, selectedZone, onSelect, zoom, bands, selectedBand, onSelectBand, showHeatmap, showGates, showCameras }: {
+function virtualBandOffset(band: SafetyBand, scenario: string | undefined, tick: number) {
+  if (!scenario || scenario === "normal") return { x: 0, y: 0 };
+  const phase = (tick + band.id % 13) * 0.52;
+  const pulse = Math.sin(phase) * 3.4;
+  if (scenario === "congestion" && (band.zone === "G" || band.zone === "H")) return { x: -Math.abs(pulse) - 2, y: -Math.abs(Math.cos(phase) * 4) };
+  if (scenario === "redirect" && band.zone === "G") return { x: -8 - Math.abs(pulse), y: -5 + Math.sin(phase) * 2 };
+  if (scenario === "redirect" && band.zone === "F") return { x: -4 + Math.sin(phase) * 5, y: 3 + Math.cos(phase) * 2 };
+  if (scenario === "distress" && band.zone === "B") return { x: Math.cos(phase) * 2, y: Math.sin(phase) * 2 };
+  if (scenario === "breach" && band.zone === "H") return { x: 5 + Math.abs(pulse), y: 4 + Math.cos(phase) * 3 };
+  return { x: Math.sin(phase) * 0.8, y: Math.cos(phase) * 0.8 };
+}
+
+const virtualFlowPaths: Record<string, { path: string; label: string }> = {
+  congestion: { path: "M725 410 C680 395 642 390 603 372", label: "Crowd accumulating toward Block G" },
+  redirect: { path: "M690 392 C642 355 602 315 560 285", label: "Redirected flow from Block G toward Block F" },
+  distress: { path: "M226 286 C260 300 286 313 316 326", label: "Response team converging on Block B" },
+  breach: { path: "M664 442 C708 466 748 490 792 508", label: "Outward movement at the Block H boundary" },
+  gateway: { path: "M744 240 C770 260 782 286 788 315", label: "Gateway coverage degradation at Block Q" },
+};
+
+function VirtualCrowdFlow({ scenario, running }: { scenario?: string; running?: boolean }) {
+  const flow = scenario ? virtualFlowPaths[scenario] : undefined;
+  if (!flow) return null;
+  return <g className={`virtual-crowd-flow ${running ? "running" : "paused"}`} aria-label={flow.label}>
+    <path d={flow.path} className="virtual-flow-route" />
+    {running ? Array.from({ length: 6 }, (_, index) => <circle key={index} r={index === 0 ? 4 : 3} className="virtual-flow-particle">
+      <animateMotion dur={`${1.6 + index * .16}s`} begin={`${index * -.3}s`} repeatCount="indefinite" path={flow.path} />
+    </circle>) : null}
+  </g>;
+}
+
+export function StadiumTwin({ zones, selectedZone, onSelect, zoom, bands, selectedBand, onSelectBand, showHeatmap, showGates, showCameras, movementScenario, movementTick = 0, movementRunning = false }: {
   zones: Zone[];
   selectedZone: string;
   onSelect: (id: string) => void;
@@ -191,6 +223,9 @@ export function StadiumTwin({ zones, selectedZone, onSelect, zoom, bands, select
   showHeatmap: boolean;
   showGates: boolean;
   showCameras: boolean;
+  movementScenario?: string;
+  movementTick?: number;
+  movementRunning?: boolean;
 }) {
   const sectionTicks = useMemo(() => Array.from({ length: 52 }, (_, index) => index * (360 / 52)), []);
   const renderedBands = useMemo(() => bands.toSorted((a, b) => a.riskScore - b.riskScore || a.id - b.id), [bands]);
@@ -232,15 +267,16 @@ export function StadiumTwin({ zones, selectedZone, onSelect, zoom, bands, select
             {[382, 426].map((radius) => <path key={radius} d={arcPath(450, 330, radius - 0.5, radius + 0.5, 128, 232, 0)} className="premium-tier-divider" />)}
           </g>
           <g className="band-map-layer" aria-label={`${bands.length} safety bands visible`}>
-            {renderedBands.map((band) => <g key={band.id} aria-label={`${band.code}, ${band.status}, risk ${band.riskScore}`} onClick={(event) => { event.stopPropagation(); onSelectBand(band.id); }}>
+            {renderedBands.map((band) => { const offset = virtualBandOffset(band, movementScenario, movementTick); return <g key={band.id} data-band-id={band.id} data-zone={band.zone} transform={`translate(${offset.x.toFixed(2)} ${offset.y.toFixed(2)})`} aria-label={`${band.code}, ${band.status}, risk ${band.riskScore}`} onClick={(event) => { event.stopPropagation(); onSelectBand(band.id); }}>
               <circle
                 cx={band.dotPositionX}
                 cy={band.dotPositionY}
                 r={selectedBand === band.id ? 4.2 : band.sos ? 3.2 : 2.1}
                 className={`band-map-dot ${band.status.toLowerCase()} ${selectedBand === band.id ? "selected" : ""}`}
               />
-            </g>)}
+            </g>; })}
           </g>
+          <VirtualCrowdFlow scenario={movementScenario} running={movementRunning} />
         </g>
         <ellipse cx="450" cy="330" rx="181" ry="140" fill="url(#turf)" className="field" />
         <ellipse cx="450" cy="330" rx="154" ry="117" className="field-ring" />
@@ -279,7 +315,7 @@ function AlertPanel() {
       <button className={activeTab === "integrity" ? "active" : ""} onClick={() => setActiveTab("integrity")}>Pop. Integrity <b className="yellow-badge">3</b></button>
     </div>
     <div className="alert-groups">{visible.map((group) => <article key={group.title} className={`alert-group ${group.tone}`}><header><strong>{group.title}</strong><span>{group.count} Alerts</span></header><div>{group.rows.map(([time,message,severity]) => <p key={`${time}-${message}`}><time>{time}</time><span>{message}</span><b className={severity.toLowerCase()}>{severity}</b></p>)}</div></article>)}</div>
-    <button className="feed-button"><ListFilter size={18} /> View Alert Feed</button>
+    <Link href="/alerts" className="feed-button"><ListFilter size={18} /> View Alert Feed</Link>
   </section>;
 }
 
@@ -296,7 +332,7 @@ function KeyMetrics({ zones, selectedZone }: { zones: Zone[]; selectedZone: Zone
 function EventTimeline() {
   const [tab, setTab] = useState<"ALL" | "ALERT" | "ACTION" | "SYSTEM">("ALL");
   const visible = tab === "ALL" ? timelineRows : timelineRows.filter((row) => row[2] === tab);
-  return <section className="timeline-panel" id="timeline"><h2>Event Timeline</h2><div className="timeline-tabs">{(["ALL","ALERT","ACTION","SYSTEM"] as const).map((item) => <button key={item} className={tab === item ? "active" : ""} onClick={() => setTab(item)}>{item === "ALERT" ? <Siren size={11} /> : item === "ACTION" ? <Radio size={11} /> : null}{item}{item === "ALERT" || item === "ACTION" ? "S" : ""}</button>)}</div><div className="timeline-list">{visible.map(([time,message,type]) => <p key={`${time}-${message}`}><time>{time}</time><span>{message}</span><b className={type.toLowerCase()}>{type}</b></p>)}</div><button className="timeline-full">View Full Timeline <span>›</span></button></section>;
+  return <section className="timeline-panel" id="timeline"><h2>Event Timeline</h2><div className="timeline-tabs">{(["ALL","ALERT","ACTION","SYSTEM"] as const).map((item) => <button key={item} className={tab === item ? "active" : ""} onClick={() => setTab(item)}>{item === "ALERT" ? <Siren size={11} /> : item === "ACTION" ? <Radio size={11} /> : null}{item}{item === "ALERT" || item === "ACTION" ? "S" : ""}</button>)}</div><div className="timeline-list">{visible.map(([time,message,type]) => <p key={`${time}-${message}`}><time>{time}</time><span>{message}</span><b className={type.toLowerCase()}>{type}</b></p>)}</div><Link href="/replay" className="timeline-full">View Full Timeline <span>›</span></Link></section>;
 }
 
 function ScenarioPanel({ scenario, onScenario }: { scenario: Scenario; onScenario: (scenario: Scenario) => void }) {
@@ -313,7 +349,7 @@ export function CommandCenterDashboard() {
   const capacity = scenario === "normal" ? 62 : scenario === "congestion" ? 67 : 64;
   return <main className="command-center"><OperationsHeader section="Command Centre" /><CommandHeader scenario={scenario} /><div className="operations-grid">
     <section className="twin-workspace" id="digital-twin"><StatusOverlay capacity={capacity} scenario={scenario} /><MapTools zoom={zoom} setZoom={setZoom} /><RiskLegend />
-      <StadiumTwin zones={zones} selectedZone={selected.id} onSelect={(zone) => { setSelectedZone(zone); setSelectedBandId(null); }} zoom={zoom} bands={DEMO_BANDS} selectedBand={selectedBandId} onSelectBand={(bandId) => { const band = DEMO_BANDS.find((item) => item.id === bandId); setSelectedBandId(bandId); if (band) setSelectedZone(band.zone); }} showHeatmap showGates showCameras />
+      <StadiumTwin zones={zones} selectedZone={selected.id} onSelect={(zone) => { setSelectedZone(zone); setSelectedBandId(null); }} zoom={zoom} bands={TWIN_RENDER_BANDS} selectedBand={selectedBandId} onSelectBand={(bandId) => { const band = TWIN_RENDER_BANDS.find((item) => item.id === bandId); setSelectedBandId(bandId); if (band) setSelectedZone(band.zone); }} showHeatmap showGates showCameras />
     </section>
     <AlertPanel /><KeyMetrics zones={zones} selectedZone={selected} /><EventTimeline /><ScenarioPanel scenario={scenario} onScenario={activateScenario} />
   </div></main>;
