@@ -37,7 +37,7 @@ def predict_crowd_risk_batch(observations: list[CrowdObservation]) -> list[Crowd
 
 @router.get("/demo-zones", response_model=list[CrowdRiskPrediction])
 def demo_zone_predictions() -> list[CrowdRiskPrediction]:
-    zones = ["M", "N", "P", "Q", "R", "J", "K", "C", "D", "E", "F", "G", "H", "B", "SPW", "SPC", "SPE"]
+    zones = ["M", "N", "P", "Q", "R", "J", "K", "L", "C", "D", "E", "F", "G", "H", "B", "SPW", "SPC", "SPE"]
     observations: list[CrowdObservation] = []
     for index, zone in enumerate(zones):
         pressure = 1.17 if zone == "G" else 0.93 if zone in {"C", "H", "SPE"} else 0.58 + (index % 4) * 0.07
@@ -64,4 +64,3 @@ def demo_zone_predictions() -> list[CrowdRiskPrediction]:
             gateway_health=0.96,
         ))
     return [_predict(observation) for observation in observations]
-

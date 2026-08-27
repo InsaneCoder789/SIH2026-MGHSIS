@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import {
-  Activity, AlertTriangle, CloudSun, Construction, Crosshair,
+  Activity, AlertTriangle, BatteryCharging, CloudSun, Construction, Crosshair,
   Hand, HeartPulse, ListFilter, LocateFixed, LockKeyhole, Minus, MousePointer2,
   Plus, Radio, RotateCcw, ShieldCheck, Siren, Users, UsersRound, Wind,
 } from "lucide-react";
@@ -25,6 +25,13 @@ type VisualSector = {
   end: number;
   color: string;
   divisions: number;
+};
+type ReplacementStation = {
+  gate: "G1" | "G8";
+  angle: number;
+  readyBands: number;
+  chargingSlots: number;
+  technicians: number;
 };
 
 const scenarioControls: Array<{ id: Scenario; label: string; icon: typeof Siren; tone: string }> = [
@@ -79,7 +86,7 @@ const visualSectors: VisualSector[] = [
   { id: "R", label: "Block R", zoneId: "R", ring: "outer", start: 103, end: 139, color: "#5c99ad", divisions: 6 },
   { id: "J", label: "Block J", zoneId: "J", ring: "outer", start: 221, end: 257, color: "#5c99ad", divisions: 6 },
   { id: "K", label: "Block K", zoneId: "K", ring: "outer", start: 257, end: 286, color: "#5c99ad", divisions: 5 },
-  { id: "L", label: "Block L", zoneId: "M", ring: "outer", start: 286, end: 310, color: "#5c99ad", divisions: 4 },
+  { id: "L", label: "Block L", zoneId: "L", ring: "outer", start: 286, end: 310, color: "#5c99ad", divisions: 4 },
   { id: "D", label: "Block D", zoneId: "D", ring: "inner", start: 309, end: 349, color: "#ef8f17", divisions: 6 },
   { id: "E", label: "Block E", zoneId: "E", ring: "inner", start: 349, end: 385, color: "#ef8f17", divisions: 6 },
   { id: "F", label: "Block F", zoneId: "F", ring: "inner", start: 25, end: 61, color: "#e7b51d", divisions: 6 },
@@ -91,6 +98,11 @@ const visualSectors: VisualSector[] = [
   { id: "SPW", label: "South Premium West", zoneId: "SPW", ring: "premium", start: 128, end: 161, color: "#f0b61f", divisions: 3 },
   { id: "SPC", label: "South Premium Centre", zoneId: "SPC", ring: "premium", start: 161, end: 199, color: "#e6e3da", divisions: 4 },
   { id: "SPE", label: "South Premium East", zoneId: "SPE", ring: "premium", start: 199, end: 232, color: "#aabd4d", divisions: 3 },
+];
+
+const replacementStations: ReplacementStation[] = [
+  { gate: "G1", angle: 223, readyBands: 48, chargingSlots: 24, technicians: 2 },
+  { gate: "G8", angle: 137, readyBands: 52, chargingSlots: 24, technicians: 2 },
 ];
 
 function fmt(value: number) { return Number(value.toFixed(3)); }
@@ -301,6 +313,9 @@ export function StadiumTwin({ zones, selectedZone, onSelect, zoom, bands, select
   movementRunning?: boolean;
 }) {
   const sectionTicks = useMemo(() => Array.from({ length: 52 }, (_, index) => index * (360 / 52)), []);
+  const [selectedStation, setSelectedStation] = useState<ReplacementStation | null>(null);
+  const [replacementQueuedFor, setReplacementQueuedFor] = useState<string | null>(null);
+  const selectedStationPoint = selectedStation ? stagePoint(400, selectedStation.angle) : null;
   return <div className="stadium-stage" style={{ "--stadium-zoom": zoom } as CSSProperties}>
     <svg viewBox="0 0 900 690" role="img" aria-label="Interactive cricket stadium digital twin risk heatmap">
       <defs>
@@ -357,6 +372,28 @@ export function StadiumTwin({ zones, selectedZone, onSelect, zoom, bands, select
           { ...stagePoint(367, 158), text: "G6", className: "" },
           { ...stagePoint(350, 137), text: "G8", className: "gate-red" },
         ].map(({ x, y, text, className }) => <g key={text} className="gate-marker"><rect x={x - 15} y={y - 12} width="30" height="24" className={`gate ${className}`} /><text x={x} y={y + 5} className="gate-label">{text}</text></g>) : null}
+        {showGates ? replacementStations.map((station) => {
+          const point = stagePoint(400, station.angle);
+          return <foreignObject key={station.gate} x={point.x - 61} y={point.y - 23} width="122" height="46" className="replacement-station-object">
+            <button type="button" className={selectedStation?.gate === station.gate ? "active" : ""} onClick={() => { setSelectedStation(station); setReplacementQueuedFor(null); }} aria-label={`Open ${station.gate} band replacement station`}>
+              <BatteryCharging size={15} /><span><b>{station.gate} Replacement</b><small>{station.readyBands} bands ready</small></span>
+            </button>
+          </foreignObject>;
+        }) : null}
+        {selectedStation && selectedStationPoint ? <foreignObject
+          x={Math.max(8, Math.min(692, selectedStationPoint.x - 100))}
+          y={selectedStationPoint.y - 132}
+          width="200"
+          height="108"
+          className="replacement-station-panel-object"
+        >
+          <section className="replacement-station-panel">
+            <header><span>Band Replacement Station</span><button type="button" onClick={() => setSelectedStation(null)} aria-label="Close replacement station">×</button></header>
+            <strong><i /> {selectedStation.gate} Operational</strong>
+            <div><span><b>{selectedStation.readyBands}</b> Ready bands</span><span><b>{selectedStation.chargingSlots}</b> Charging slots</span><span><b>{selectedStation.technicians}</b> Technicians</span></div>
+            <button type="button" className="replacement-queue-button" onClick={() => setReplacementQueuedFor(selectedStation.gate)}>{replacementQueuedFor === selectedStation.gate ? "Replacement desk notified" : "Queue band replacement"}</button>
+          </section>
+        </foreignObject> : null}
         {showCameras ? [
           { ...stagePoint(332, 286), text: "C1" }, { ...stagePoint(270, 318), text: "C2" },
           { ...stagePoint(270, 42), text: "C3" }, { ...stagePoint(332, 74), text: "C4" },

@@ -51,7 +51,7 @@ export type BandPopulationSummary = {
   sos: number;
 };
 
-export const BAND_ZONES = ["M", "N", "P", "Q", "R", "J", "K", "C", "D", "E", "F", "G", "H", "B", "SPW", "SPC", "SPE"] as const;
+export const BAND_ZONES = ["M", "N", "P", "Q", "R", "J", "K", "L", "C", "D", "E", "F", "G", "H", "B", "SPW", "SPC", "SPE"] as const;
 export const DEMO_BAND_COUNT = 20_000;
 export const TWIN_RENDER_BAND_COUNT = 1_200;
 export const TWIN_MAP_BAND_COUNT = 5_000;
@@ -66,7 +66,7 @@ export const DEMO_BAND_SUMMARY: BandPopulationSummary = {
 };
 
 export const ZONE_SEGMENT_COUNTS: Record<(typeof BAND_ZONES)[number], number> = {
-  M: 6, N: 7, P: 6, Q: 6, R: 6, J: 6, K: 5,
+  M: 6, N: 7, P: 6, Q: 6, R: 6, J: 6, K: 5, L: 4,
   C: 4, D: 6, E: 6, F: 6, G: 5, H: 5, B: 4,
   SPW: 3, SPC: 4, SPE: 3,
 };
@@ -75,7 +75,8 @@ const zoneGeometry: Record<string, { start: number; end: number; inner: number; 
   M: { start: 310, end: 352, inner: 256, outer: 334 }, N: { start: 352, end: 392, inner: 256, outer: 334 },
   P: { start: 32, end: 68, inner: 256, outer: 334 }, Q: { start: 68, end: 103, inner: 256, outer: 334 },
   R: { start: 103, end: 139, inner: 256, outer: 334 }, J: { start: 221, end: 257, inner: 256, outer: 334 },
-  K: { start: 257, end: 286, inner: 256, outer: 334 }, C: { start: 281, end: 309, inner: 188, outer: 240 },
+  K: { start: 257, end: 286, inner: 256, outer: 334 }, L: { start: 286, end: 310, inner: 256, outer: 334 },
+  C: { start: 281, end: 309, inner: 188, outer: 240 },
   D: { start: 309, end: 349, inner: 188, outer: 240 }, E: { start: 349, end: 385, inner: 188, outer: 240 },
   F: { start: 25, end: 61, inner: 188, outer: 240 }, G: { start: 61, end: 94, inner: 188, outer: 240 },
   H: { start: 94, end: 128, inner: 188, outer: 240 }, B: { start: 254, end: 281, inner: 188, outer: 240 },
@@ -94,7 +95,17 @@ function dotFor(id: number, zone: (typeof BAND_ZONES)[number], segment: number) 
   const segmentWidth = (geometry.end - geometry.start) / segmentCount;
   const segmentStart = geometry.start + segment * segmentWidth;
   const angle = segmentStart + 0.8 + seeded(id, 1) * Math.max(0.5, segmentWidth - 1.6);
-  const radius = geometry.inner + 6 + seeded(id, 2) * (geometry.outer - geometry.inner - 12);
+  let innerRadius = geometry.inner;
+  let outerRadius = geometry.outer;
+  if (zone === "SPW" || zone === "SPC" || zone === "SPE") {
+    const tier = seeded(id, 12);
+    if (tier >= 0.15 && tier < 0.3) [innerRadius, outerRadius] = [252, 286];
+    else if (tier >= 0.3 && tier < 0.45) [innerRadius, outerRadius] = [298, 337];
+    else if (tier >= 0.45 && tier < 0.63) [innerRadius, outerRadius] = [349, 377];
+    else if (tier >= 0.63 && tier < 0.81) [innerRadius, outerRadius] = [388, 420];
+    else if (tier >= 0.81) [innerRadius, outerRadius] = [432, 464];
+  }
+  const radius = innerRadius + 5 + seeded(id, 2) * (outerRadius - innerRadius - 10);
   const radians = ((angle - 90) * Math.PI) / 180;
   return {
     x: Number((450 + radius * Math.cos(radians)).toFixed(2)),
@@ -189,13 +200,21 @@ export function generateDemoBands(count: number, startId = 1): SafetyBand[] {
 }
 
 function twinSampleIds(count: number) {
-  const priority = [7, 42, 55, 84, 118, 173, 211, 244, 298, 555];
+  const sampleCount = Math.min(DEMO_BAND_COUNT, Math.max(1, Math.floor(count)));
+  const priority = [7, 42, 55, 84, 118, 173, 211, 244, 298, 555].filter((id) => id <= DEMO_BAND_COUNT).slice(0, sampleCount);
   const ids = new Set(priority);
-  const step = DEMO_BAND_COUNT / (count - priority.length);
-  for (let index = 0; ids.size < count; index += 1) {
-    ids.add(Math.min(DEMO_BAND_COUNT, Math.max(1, Math.round(1 + index * step))));
+  const distributedCount = sampleCount - ids.size;
+
+  for (let index = 0; index < distributedCount; index += 1) {
+    const progress = distributedCount <= 1 ? 0 : index / (distributedCount - 1);
+    ids.add(Math.round(1 + progress * (DEMO_BAND_COUNT - 1)));
   }
-  return [...ids].toSorted((a, b) => a - b).slice(0, count);
+
+  for (let id = 1; ids.size < sampleCount && id <= DEMO_BAND_COUNT; id += 1) {
+    ids.add(id);
+  }
+
+  return [...ids].toSorted((a, b) => a - b).slice(0, sampleCount);
 }
 
 export const TWIN_RENDER_BANDS = twinSampleIds(TWIN_RENDER_BAND_COUNT).map(generateDemoBand);
