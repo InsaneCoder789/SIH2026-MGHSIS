@@ -30,6 +30,8 @@ type VisualSector = {
 type ReplacementStation = {
   gate: "G1" | "G8";
   angle: number;
+  cardX: number;
+  cardY: number;
   readyBands: number;
   chargingSlots: number;
   technicians: number;
@@ -102,8 +104,8 @@ const visualSectors: VisualSector[] = [
 ];
 
 const replacementStations: ReplacementStation[] = [
-  { gate: "G1", angle: 223, readyBands: 48, chargingSlots: 24, technicians: 2 },
-  { gate: "G8", angle: 137, readyBands: 52, chargingSlots: 24, technicians: 2 },
+  { gate: "G1", angle: 223, cardX: 14, cardY: 500, readyBands: 48, chargingSlots: 24, technicians: 2 },
+  { gate: "G8", angle: 137, cardX: 738, cardY: 500, readyBands: 52, chargingSlots: 24, technicians: 2 },
 ];
 
 function fmt(value: number) { return Number(value.toFixed(3)); }
@@ -317,13 +319,13 @@ export function StadiumTwin({ zones, selectedZone, onSelect, zoom, bands, select
   const sectionTicks = useMemo(() => Array.from({ length: 52 }, (_, index) => index * (360 / 52)), []);
   const [selectedStation, setSelectedStation] = useState<ReplacementStation | null>(null);
   const [replacementQueuedFor, setReplacementQueuedFor] = useState<string | null>(null);
-  const selectedStationPoint = selectedStation ? stagePoint(400, selectedStation.angle) : null;
   return <div className="stadium-stage" style={{ "--stadium-zoom": zoom } as CSSProperties}>
     <svg viewBox="0 0 900 690" role="img" aria-label="Interactive cricket stadium digital twin risk heatmap">
       <defs>
         <radialGradient id="turf" cx="50%" cy="43%" r="64%"><stop offset="0%" stopColor="#78a85c" /><stop offset="65%" stopColor="#628f4d" /><stop offset="100%" stopColor="#4f7942" /></radialGradient>
         <linearGradient id="outerBowl" x1="0" y1="0" x2="0" y2="1"><stop stopColor="#73b3c6" /><stop offset="1" stopColor="#4d8ea5" /></linearGradient>
         <filter id="stadiumShadow"><feDropShadow dx="0" dy="12" stdDeviation="12" floodColor="#000" floodOpacity=".55" /></filter>
+        <marker id="replacementStationArrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L8 4 L0 8 Z" /></marker>
       </defs>
       <g className="stadium-geometry" filter="url(#stadiumShadow)">
         <ellipse cx="450" cy="330" rx="345" ry="267" className="outer-bowl" />
@@ -375,16 +377,25 @@ export function StadiumTwin({ zones, selectedZone, onSelect, zoom, bands, select
           { ...stagePoint(350, 137), text: "G8", className: "gate-red" },
         ].map(({ x, y, text, className }) => <g key={text} className="gate-marker"><rect x={x - 15} y={y - 12} width="30" height="24" className={`gate ${className}`} /><text x={x} y={y + 5} className="gate-label">{text}</text></g>) : null}
         {showGates ? replacementStations.map((station) => {
-          const point = stagePoint(400, station.angle);
-          return <foreignObject key={station.gate} x={point.x - 61} y={point.y - 23} width="122" height="46" className="replacement-station-object">
-            <button type="button" className={selectedStation?.gate === station.gate ? "active" : ""} onClick={() => { setSelectedStation(station); setReplacementQueuedFor(null); }} aria-label={`Open ${station.gate} band replacement station`}>
-              <BatteryCharging size={15} /><span><b>{station.gate} Replacement</b><small>{station.readyBands} bands ready</small></span>
-            </button>
-          </foreignObject>;
+          const gate = stagePoint(350, station.angle);
+          const left = station.gate === "G1";
+          const startX = left ? station.cardX + 148 : station.cardX;
+          const endX = gate.x + (left ? -19 : 19);
+          const elbowX = left ? startX + 22 : startX - 22;
+          const cardMidY = station.cardY + 25;
+          return <g key={station.gate} className="replacement-station-beacon">
+            <path d={`M ${startX} ${cardMidY} L ${elbowX} ${cardMidY} L ${endX} ${gate.y}`} className="replacement-station-leader" markerEnd="url(#replacementStationArrow)" />
+            <circle cx={endX} cy={gate.y} r="3" className="replacement-station-anchor" />
+            <foreignObject x={station.cardX} y={station.cardY} width="148" height="50" className="replacement-station-object">
+              <button type="button" className={selectedStation?.gate === station.gate ? "active" : ""} onClick={() => { setSelectedStation(station); setReplacementQueuedFor(null); }} aria-label={`Open ${station.gate} band replacement station`}>
+                <BatteryCharging size={18} /><span><b>{station.gate} Band Station</b><small>{station.readyBands} replacements ready</small></span>
+              </button>
+            </foreignObject>
+          </g>;
         }) : null}
-        {selectedStation && selectedStationPoint ? <foreignObject
-          x={Math.max(8, Math.min(692, selectedStationPoint.x - 100))}
-          y={selectedStationPoint.y - 132}
+        {selectedStation ? <foreignObject
+          x={selectedStation.gate === "G1" ? 14 : 686}
+          y={selectedStation.cardY - 118}
           width="200"
           height="108"
           className="replacement-station-panel-object"
