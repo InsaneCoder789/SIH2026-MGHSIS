@@ -17,7 +17,7 @@ const modules = [
   { title: "Scenario Lab", description: "Trigger deterministic event conditions for SIH demonstration.", icon: FlaskConical, metric: "6 scenarios", href: "/scenario-lab", tone: "yellow" },
   { title: "Intervention Console", description: "Review, authorize and verify recommended field actions.", icon: Workflow, metric: "5 recommendations", href: "/interventions", tone: "teal" },
   { title: "Event Timeline / Replay", description: "Follow risk spikes, alerts and operator actions over time.", icon: Clock3, metric: "12+ audit events", href: "/replay", tone: "blue" },
-  { title: "System Health", description: "Gateway, camera, API and real-time stream diagnostics.", icon: Activity, metric: "97.8% healthy", href: "/system-health", tone: "green" },
+  { title: "System Health", description: "Gateway, camera, API and real-time stream diagnostics.", icon: Activity, metric: "Live diagnostics", href: "/system-health", tone: "green" },
   { title: "Settings / Configuration", description: "Risk weights, event thresholds and deployment mode.", icon: Settings, metric: "Cricket mode", href: "/settings", tone: "neutral" },
 ] as const;
 

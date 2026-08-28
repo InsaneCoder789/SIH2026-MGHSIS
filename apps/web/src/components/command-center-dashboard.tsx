@@ -11,9 +11,10 @@ import { useDemoOperations } from "@/components/demo-operations-context";
 import { OperationsHeader } from "@/components/operations-header";
 import { getTwinMapBands, type TwinMapBand } from "@/lib/bands";
 import {
-  getDigitalTwinSnapshot, levelFor, scenarioNotes,
-  type RiskLevel, type Scenario, type Zone,
+  levelFor, scenarioNotes,
+  type DigitalTwinSnapshot, type RiskLevel, type Scenario, type Zone,
 } from "@/lib/mghsis-demo";
+import { useLiveDigitalTwin } from "@/lib/use-live-digital-twin";
 
 type AlertTone = "human" | "crowd" | "integrity";
 type VisualSector = {
@@ -125,16 +126,14 @@ function HeaderMetric({ label, children, accent }: { label: string; children: Re
   return <div className="header-metric"><span>{label}</span><strong className={accent}>{children}</strong></div>;
 }
 
-function CommandHeader({ scenario }: { scenario: Scenario }) {
-  const { event } = getDigitalTwinSnapshot(scenario);
-  const authenticated = scenario === "gateway" ? 36_612 : scenario === "congestion" ? 38_569 : 38_247;
-  const observed = scenario === "breach" ? 42_402 : scenario === "congestion" ? 42_378 : 41_892;
+function CommandHeader({ snapshot, alertCount }: { snapshot: DigitalTwinSnapshot; alertCount: number }) {
+  const { event, totals } = snapshot;
   return <header className="command-header">
     <HeaderMetric label="Event"><span>GT vs DC - IPL 2025</span><i className="live-dot" /><small>LIVE</small></HeaderMetric>
     <HeaderMetric label="Mode" accent="teal">Cricket Stadium</HeaderMetric>
-    <HeaderMetric label="Authenticated"><Users size={19} /> {authenticated.toLocaleString()}</HeaderMetric>
-    <HeaderMetric label="Observed (Est.)"><UsersRound size={19} /> {observed.toLocaleString()}</HeaderMetric>
-    <HeaderMetric label="Active Alerts" accent="red"><AlertTriangle size={19} /> 12</HeaderMetric>
+    <HeaderMetric label="Authenticated"><Users size={19} /> {totals.authenticated.toLocaleString()}</HeaderMetric>
+    <HeaderMetric label="Observed (Est.)"><UsersRound size={19} /> {totals.observed.toLocaleString()}</HeaderMetric>
+    <HeaderMetric label="Active Alerts" accent="red"><AlertTriangle size={19} /> {alertCount}</HeaderMetric>
     <HeaderMetric label="System Health" accent={event.systemHealth === "GOOD" ? "green" : "amber"}><ShieldCheck size={19} /> {event.systemHealth}</HeaderMetric>
     <HeaderMetric label="Event Time"><span className="event-clock">20:34:18</span><small className="event-date">Wed, 14 May 2025</small></HeaderMetric>
   </header>;
@@ -240,17 +239,20 @@ function BandMapCanvas({ bands, selectedBand, onSelectBand, movementScenario, mo
     if (!canvas) return;
     const pixelRatio = 1;
     canvas.width = 900 * pixelRatio;
-    canvas.height = 690 * pixelRatio;
+    canvas.height = 820 * pixelRatio;
     const context = canvas.getContext("2d");
     if (!context) return;
     context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
-    context.clearRect(0, 0, 900, 690);
+    context.clearRect(0, 0, 900, 820);
 
     const colors = { NORMAL: "#48cf82", ELEVATED: "#e1c326", OFFLINE: "#778186", DISTRESSED: "#ed4a37", SOS: "#ed4a37" } as const;
+    const grouped: Record<keyof typeof colors, TwinMapBand[]> = { NORMAL: [], ELEVATED: [], OFFLINE: [], DISTRESSED: [], SOS: [] };
+    for (const band of bands) {
+      if (band.id !== selectedBand) grouped[band.status].push(band);
+    }
     for (const status of ["NORMAL", "ELEVATED", "OFFLINE", "DISTRESSED", "SOS"] as const) {
       context.beginPath();
-      for (const band of bands) {
-        if (band.id === selectedBand || band.status !== status) continue;
+      for (const band of grouped[status]) {
         const offset = virtualBandOffset(band, movementScenario, movementTick);
         context.moveTo(band.dotPositionX + offset.x + (band.sos ? 3.2 : 2.1), band.dotPositionY + offset.y);
         context.arc(band.dotPositionX + offset.x, band.dotPositionY + offset.y, band.sos ? 3.2 : 2.1, 0, Math.PI * 2);
@@ -292,7 +294,7 @@ function BandMapCanvas({ bands, selectedBand, onSelectBand, movementScenario, mo
     if (nearest) onSelectBand(nearest.id);
   };
 
-  return <foreignObject x="0" y="0" width="900" height="690" className="band-map-canvas-layer">
+  return <foreignObject x="0" y="0" width="900" height="820" className="band-map-canvas-layer">
     <canvas ref={canvasRef} onClick={selectNearestBand} aria-label={`${bands.length} interactive safety bands visible`} />
   </foreignObject>;
 }
@@ -440,16 +442,17 @@ function ScenarioPanel({ scenario, onScenario }: { scenario: Scenario; onScenari
 }
 
 export function CommandCenterDashboard() {
-  const { scenario, activateScenario } = useDemoOperations();
+  const { scenario, alerts, activateScenario } = useDemoOperations();
   const isBrowser = useSyncExternalStore(subscribeToBrowser, () => true, () => false);
   const mapBands = useMemo(() => isBrowser ? getTwinMapBands() : [], [isBrowser]);
   const [selectedZone, setSelectedZone] = useState("G");
   const [zoom, setZoom] = useState(1);
   const [selectedBandId, setSelectedBandId] = useState<number | null>(null);
-  const { zones } = getDigitalTwinSnapshot(scenario);
+  const snapshot = useLiveDigitalTwin(scenario);
+  const { zones, totals, event } = snapshot;
   const selected = zones.find((zone) => zone.id === selectedZone) ?? zones[0];
-  const capacity = scenario === "normal" ? 62 : scenario === "congestion" ? 67 : 64;
-  return <main className="command-center"><OperationsHeader section="Command Centre" /><CommandHeader scenario={scenario} /><div className="operations-grid">
+  const capacity = Math.round((totals.observed / event.expectedCapacity) * 100);
+  return <main className="command-center"><OperationsHeader section="Command Centre" /><CommandHeader snapshot={snapshot} alertCount={alerts.filter((alert) => alert.status !== "RESOLVED").length} /><div className="operations-grid">
     <section className="twin-workspace" id="digital-twin"><StatusOverlay capacity={capacity} scenario={scenario} /><MapTools zoom={zoom} setZoom={setZoom} /><RiskLegend />
       <StadiumTwin zones={zones} selectedZone={selected.id} onSelect={(zone) => { setSelectedZone(zone); setSelectedBandId(null); }} zoom={zoom} bands={mapBands} selectedBand={selectedBandId} onSelectBand={(bandId) => { const band = mapBands.find((item) => item.id === bandId); setSelectedBandId(bandId); if (band) setSelectedZone(band.zone); }} showHeatmap showGates showCameras />
     </section>

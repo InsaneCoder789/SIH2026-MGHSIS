@@ -1,3 +1,5 @@
+import { ZONE_BAND_CAPACITIES } from "@/lib/bands";
+
 export type RiskLevel = "low" | "moderate" | "high" | "critical";
 export type Scenario = "normal" | "distress" | "congestion" | "breach" | "gateway" | "redirect";
 
@@ -85,12 +87,12 @@ export const demoEvent: EventSummary = {
     mapWidth: 720,
     mapHeight: 720,
   },
-  expectedCapacity: 48200,
+  expectedCapacity: 50_000,
   eventTime: "20:34 IST",
   systemHealth: "GOOD",
 };
 
-export const baseZones: Zone[] = [
+const baseZoneSeeds: Zone[] = [
   { id: "M", label: "Block M", ring: "outer", start: 214, end: 249, safeCapacity: 3600, expected: 2360, authenticated: 2332, observed: 2390, crowdRisk: 22, integrityRisk: 9, humanAlerts: 0, inflow: 86, outflow: 78, cctvConfidence: 0.9, gatewayHealth: 0.98, adjacent: ["N", "L", "D"], gates: ["G3"], cameras: [] },
   { id: "N", label: "Block N", ring: "outer", start: 250, end: 285, safeCapacity: 4200, expected: 3180, authenticated: 3139, observed: 3206, crowdRisk: 31, integrityRisk: 11, humanAlerts: 0, inflow: 112, outflow: 104, cctvConfidence: 0.91, gatewayHealth: 0.98, adjacent: ["M", "P", "E"], gates: ["G4"], cameras: [] },
   { id: "P", label: "Block P", ring: "outer", start: 286, end: 321, safeCapacity: 3800, expected: 2810, authenticated: 2798, observed: 2876, crowdRisk: 38, integrityRisk: 13, humanAlerts: 0, inflow: 128, outflow: 91, cctvConfidence: 0.88, gatewayHealth: 0.96, adjacent: ["N", "Q", "F"], gates: ["G5"], cameras: ["CAM-F"] },
@@ -110,6 +112,11 @@ export const baseZones: Zone[] = [
   { id: "SPC", label: "South Premium Centre", ring: "premium", start: 171, end: 209, safeCapacity: 980, expected: 840, authenticated: 829, observed: 856, crowdRisk: 28, integrityRisk: 9, humanAlerts: 0, inflow: 28, outflow: 35, cctvConfidence: 0.87, gatewayHealth: 0.97, adjacent: ["SPW", "SPE", "C"], gates: ["VIP-2"], cameras: [] },
   { id: "SPE", label: "South Premium East", ring: "premium", start: 210, end: 250, safeCapacity: 960, expected: 820, authenticated: 806, observed: 887, crowdRisk: 56, integrityRisk: 18, humanAlerts: 0, inflow: 55, outflow: 33, cctvConfidence: 0.89, gatewayHealth: 0.97, adjacent: ["SPC", "F"], gates: ["VIP-3"], cameras: [] },
 ];
+
+export const baseZones: Zone[] = baseZoneSeeds.map((zone) => ({
+  ...zone,
+  safeCapacity: ZONE_BAND_CAPACITIES[zone.id as keyof typeof ZONE_BAND_CAPACITIES] ?? zone.safeCapacity,
+}));
 
 export const scenarioNotes: Record<Scenario, string> = {
   normal: "Normal GT vs DC event state with live aggregate telemetry.",
@@ -131,7 +138,7 @@ export function overallRisk(zone: Zone) {
   return Math.round(zone.crowdRisk * 0.55 + zone.integrityRisk * 0.2 + zone.humanAlerts * 12);
 }
 
-export function applyScenario(scenario: Scenario): Zone[] {
+export function applyScenario(scenario: Scenario, liveTick = 0): Zone[] {
   return baseZones.map((zone) => {
     if (scenario === "distress" && zone.id === "B") {
       return { ...zone, humanAlerts: 4, crowdRisk: 74, observed: zone.observed + 42 };
@@ -152,6 +159,21 @@ export function applyScenario(scenario: Scenario): Zone[] {
       return { ...zone, crowdRisk: 54, inflow: 136, observed: zone.observed + 168 };
     }
     return zone;
+  }).map((zone, index) => {
+    if (liveTick === 0) return zone;
+    const phase = liveTick * 0.47 + index * 0.73;
+    const flowPressure = Math.max(-60, Math.min(60, zone.inflow - zone.outflow));
+    const observedDelta = Math.round(
+      Math.sin(phase) * zone.safeCapacity * 0.0035
+      + Math.cos(phase * 0.61) * zone.safeCapacity * 0.0015
+      + flowPressure * 0.08,
+    );
+    const authenticatedDelta = Math.round(Math.sin(phase * 0.79) * zone.safeCapacity * 0.0018);
+    return {
+      ...zone,
+      observed: Math.max(0, Math.min(Math.round(zone.safeCapacity * 1.35), zone.observed + observedDelta)),
+      authenticated: Math.max(0, Math.min(zone.observed + observedDelta, zone.authenticated + authenticatedDelta)),
+    };
   });
 }
 
@@ -223,8 +245,8 @@ export function deriveAlerts(zones: Zone[], scenario: Scenario): DemoAlert[] {
   ];
 }
 
-export function getDigitalTwinSnapshot(scenario: Scenario = "normal"): DigitalTwinSnapshot {
-  const zones = applyScenario(scenario);
+export function getDigitalTwinSnapshot(scenario: Scenario = "normal", liveTick = 0): DigitalTwinSnapshot {
+  const zones = applyScenario(scenario, liveTick);
   const totals = aggregateZones(zones);
 
   return {

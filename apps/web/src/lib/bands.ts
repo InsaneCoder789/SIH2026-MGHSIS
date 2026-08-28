@@ -52,17 +52,13 @@ export type BandPopulationSummary = {
 };
 
 export const BAND_ZONES = ["M", "N", "P", "Q", "R", "J", "K", "L", "C", "D", "E", "F", "G", "H", "B", "SPW", "SPC", "SPE"] as const;
-export const DEMO_BAND_COUNT = 20_000;
+export const DEMO_BAND_COUNT = 50_000;
 export const TWIN_RENDER_BAND_COUNT = 1_200;
-export const TWIN_MAP_BAND_COUNT = 5_000;
-export const DEMO_BAND_SUMMARY: BandPopulationSummary = {
-  total: DEMO_BAND_COUNT,
-  active: 19_792,
-  distressed: 134,
-  elevated: 2,
-  offline: 208,
-  lowBattery: 377,
-  sos: 116,
+export const TWIN_MAP_BAND_COUNT = 10_000;
+export const ZONE_BAND_CAPACITIES: Record<(typeof BAND_ZONES)[number], number> = {
+  M: 4_280, N: 5_020, P: 4_520, Q: 4_640, R: 4_280, J: 3_810, K: 4_050, L: 3_210,
+  C: 1_900, D: 2_020, E: 1_550, F: 1_670, G: 1_960, H: 1_790, B: 1_900,
+  SPW: 1_090, SPC: 1_170, SPE: 1_140,
 };
 
 export const ZONE_SEGMENT_COUNTS: Record<(typeof BAND_ZONES)[number], number> = {
@@ -89,6 +85,37 @@ function seeded(id: number, salt: number) {
   return value - Math.floor(value);
 }
 
+const zoneCapacityBoundaries = BAND_ZONES.reduce<Array<{ zone: (typeof BAND_ZONES)[number]; end: number }>>((items, zone) => {
+  const previous = items.at(-1)?.end ?? 0;
+  items.push({ zone, end: previous + ZONE_BAND_CAPACITIES[zone] });
+  return items;
+}, []);
+
+function zoneAndSegmentFor(id: number) {
+  // 7,919 is coprime with 50,000, producing a stable permutation with exact zone totals.
+  const capacitySlot = ((id - 1) * 7_919) % DEMO_BAND_COUNT;
+  const zone = zoneCapacityBoundaries.find((boundary) => capacitySlot < boundary.end)?.zone ?? BAND_ZONES.at(-1)!;
+  const segment = Math.floor(seeded(id, 13) * ZONE_SEGMENT_COUNTS[zone]);
+  return { zone, segment };
+}
+
+function populationSummary(count: number): BandPopulationSummary {
+  const summary: BandPopulationSummary = { total: count, active: 0, distressed: 0, elevated: 0, offline: 0, lowBattery: 0, sos: 0 };
+  for (let id = 1; id <= count; id += 1) {
+    const signal = bandSignals(id);
+    const status = statusFor(signal.connectivity, signal.risk.level, signal.sos);
+    if (status === "OFFLINE") summary.offline += 1;
+    else summary.active += 1;
+    if (status === "DISTRESSED") summary.distressed += 1;
+    if (status === "ELEVATED") summary.elevated += 1;
+    if (status === "SOS") summary.sos += 1;
+    if (signal.battery <= 20) summary.lowBattery += 1;
+  }
+  return summary;
+}
+
+export const DEMO_BAND_SUMMARY = populationSummary(DEMO_BAND_COUNT);
+
 function dotFor(id: number, zone: (typeof BAND_ZONES)[number], segment: number) {
   const geometry = zoneGeometry[zone];
   const segmentCount = ZONE_SEGMENT_COUNTS[zone];
@@ -99,11 +126,11 @@ function dotFor(id: number, zone: (typeof BAND_ZONES)[number], segment: number) 
   let outerRadius = geometry.outer;
   if (zone === "SPW" || zone === "SPC" || zone === "SPE") {
     const tier = seeded(id, 12);
-    if (tier >= 0.15 && tier < 0.3) [innerRadius, outerRadius] = [252, 286];
-    else if (tier >= 0.3 && tier < 0.45) [innerRadius, outerRadius] = [298, 337];
-    else if (tier >= 0.45 && tier < 0.63) [innerRadius, outerRadius] = [349, 377];
-    else if (tier >= 0.63 && tier < 0.81) [innerRadius, outerRadius] = [388, 420];
-    else if (tier >= 0.81) [innerRadius, outerRadius] = [432, 464];
+    if (tier >= 1 / 6 && tier < 2 / 6) [innerRadius, outerRadius] = [252, 286];
+    else if (tier >= 2 / 6 && tier < 3 / 6) [innerRadius, outerRadius] = [298, 337];
+    else if (tier >= 3 / 6 && tier < 4 / 6) [innerRadius, outerRadius] = [349, 377];
+    else if (tier >= 4 / 6 && tier < 5 / 6) [innerRadius, outerRadius] = [388, 420];
+    else if (tier >= 5 / 6) [innerRadius, outerRadius] = [432, 464];
   }
   const radius = innerRadius + 5 + seeded(id, 2) * (outerRadius - innerRadius - 10);
   const radians = ((angle - 90) * Math.PI) / 180;
@@ -126,10 +153,7 @@ function statusFor(connectivity: BandConnectivity, riskLevel: HumanRiskLevel, so
 }
 
 function bandSignals(id: number) {
-  const index = id - 1;
-  const zone = BAND_ZONES[index % BAND_ZONES.length];
-  const zoneSequence = Math.floor(index / BAND_ZONES.length);
-  const segment = zoneSequence % ZONE_SEGMENT_COUNTS[zone];
+  const { zone, segment } = zoneAndSegmentFor(id);
   const isOffline = id % 97 === 0 || id === 118 || id === 244;
   const sos = id === 7 || id % 173 === 0;
   const fallDetected = id === 42 || id % 149 === 0;
@@ -221,22 +245,16 @@ export const TWIN_RENDER_BANDS = twinSampleIds(TWIN_RENDER_BAND_COUNT).map(gener
 let twinMapBands: TwinMapBand[] | null = null;
 
 function generateTwinMapBand(id: number): TwinMapBand {
-  const index = id - 1;
-  const zone = BAND_ZONES[index % BAND_ZONES.length];
-  const segment = Math.floor(index / BAND_ZONES.length) % ZONE_SEGMENT_COUNTS[zone];
-  const offline = id % 97 === 0 || id === 118 || id === 244;
-  const sos = id === 7 || id % 173 === 0;
-  const distressed = id === 42 || id % 149 === 0;
-  const elevated = id % 37 === 0 || id === 55 || id === 219;
-  const status: BandStatus = offline ? "OFFLINE" : sos ? "SOS" : distressed ? "DISTRESSED" : elevated ? "ELEVATED" : "NORMAL";
-  const dot = dotFor(id, zone, segment);
+  const signal = bandSignals(id);
+  const status = statusFor(signal.connectivity, signal.risk.level, signal.sos);
+  const dot = dotFor(id, signal.zone, signal.segment);
   return {
     id,
     code: `WB-${String(id).padStart(5, "0")}`,
-    zone,
+    zone: signal.zone,
     status,
-    sos,
-    riskScore: sos ? 100 : distressed ? 88 : elevated ? 58 : 12 + Math.round(seeded(id, 11) * 24),
+    sos: signal.sos,
+    riskScore: signal.risk.score,
     dotPositionX: dot.x,
     dotPositionY: dot.y,
   };

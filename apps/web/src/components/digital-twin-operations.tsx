@@ -9,8 +9,9 @@ import { useDeferredValue, useEffect, useMemo, useState, useSyncExternalStore, t
 import { StadiumTwin } from "@/components/command-center-dashboard";
 import { useDemoOperations } from "@/components/demo-operations-context";
 import { OperationsHeader } from "@/components/operations-header";
-import { BAND_ZONES, DEMO_BAND_COUNT, DEMO_BAND_SUMMARY, TWIN_RENDER_BANDS, ZONE_SEGMENT_COUNTS, generateDemoBand, getTwinMapBands, type BandStatus, type SafetyBand } from "@/lib/bands";
-import { getDigitalTwinSnapshot, levelFor, overallRisk, type Zone } from "@/lib/mghsis-demo";
+import { BAND_ZONES, DEMO_BAND_COUNT, DEMO_BAND_SUMMARY, TWIN_RENDER_BANDS, ZONE_BAND_CAPACITIES, ZONE_SEGMENT_COUNTS, generateDemoBand, getTwinMapBands, type BandStatus, type SafetyBand } from "@/lib/bands";
+import { levelFor, overallRisk, type Zone } from "@/lib/mghsis-demo";
+import { useLiveDigitalTwin } from "@/lib/use-live-digital-twin";
 
 type RailView = "BANDS" | "ZONES";
 type StatusFilter = "ALL" | BandStatus;
@@ -58,10 +59,11 @@ function SelectedBandPanel({ band }: { band: SafetyBand }) {
   </section>;
 }
 
-function SegmentDistribution({ zone, bands, totalBands }: { zone: Zone; bands: SafetyBand[]; totalBands: number }) {
-  const scale = totalBands / bands.length;
+function SegmentDistribution({ zone, bands }: { zone: Zone; bands: SafetyBand[] }) {
+  const zoneBands = bands.filter((band) => band.zone === zone.id);
+  const scale = (ZONE_BAND_CAPACITIES[zone.id as keyof typeof ZONE_BAND_CAPACITIES] ?? zoneBands.length) / Math.max(1, zoneBands.length);
   const segments = Array.from({ length: ZONE_SEGMENT_COUNTS[zone.id as keyof typeof ZONE_SEGMENT_COUNTS] ?? 1 }, (_, index) => {
-    const segmentBands = bands.filter((band) => band.zone === zone.id && band.segment === index + 1);
+    const segmentBands = zoneBands.filter((band) => band.segment === index + 1);
     return {
       id: index + 1,
       count: Math.round(segmentBands.length * scale),
@@ -74,13 +76,14 @@ function SegmentDistribution({ zone, bands, totalBands }: { zone: Zone; bands: S
 }
 
 function ZoneRail({ zones, bands, totalBands, selectedZone, onSelect }: { zones: Zone[]; bands: SafetyBand[]; totalBands: number; selectedZone: string; onSelect: (zone: string) => void }) {
-  const scale = totalBands / bands.length;
   return <div className="twin-zone-list">{zones.toSorted((a, b) => overallRisk(b) - overallRisk(a)).map((zone) => {
     const score = overallRisk(zone);
     const zoneBands = bands.filter((band) => band.zone === zone.id);
+    const zoneCapacity = ZONE_BAND_CAPACITIES[zone.id as keyof typeof ZONE_BAND_CAPACITIES] ?? Math.round(totalBands / zones.length);
+    const scale = zoneCapacity / Math.max(1, zoneBands.length);
     const distressed = Math.round(zoneBands.filter((band) => band.status === "DISTRESSED" || band.status === "SOS").length * scale);
     return <button key={zone.id} className={`${selectedZone === zone.id ? "selected" : ""} ${levelFor(score)}`} onClick={() => onSelect(zone.id)}>
-      <b>{zone.id}</b><div><strong>{zone.label}</strong><span>{Math.round(zoneBands.length * scale).toLocaleString()} bands / {distressed} distressed</span></div><i><span style={{ width: `${Math.min(100, score)}%` }} /></i><em>{score}</em>
+      <b>{zone.id}</b><div><strong>{zone.label}</strong><span>{zoneCapacity.toLocaleString()} bands / {distressed} distressed</span></div><i><span style={{ width: `${Math.min(100, score)}%` }} /></i><em>{score}</em>
     </button>;
   })}</div>;
 }
@@ -89,7 +92,7 @@ export function DigitalTwinOperations() {
   const { scenario } = useDemoOperations();
   const isBrowser = useSyncExternalStore(subscribeToBrowser, () => true, () => false);
   const mapBandSample = useMemo(() => isBrowser ? getTwinMapBands() : [], [isBrowser]);
-  const { zones, totals } = getDigitalTwinSnapshot(scenario);
+  const { zones, totals } = useLiveDigitalTwin(scenario);
   const summary = DEMO_BAND_SUMMARY;
   const [railView, setRailView] = useState<RailView>("BANDS");
   const [selectedZone, setSelectedZone] = useState("G");
@@ -186,7 +189,7 @@ export function DigitalTwinOperations() {
           <StadiumTwin zones={displayZones} selectedZone={selectedZone} onSelect={(id) => { setSelectedZone(id); setSelectedBandId(null); }} zoom={zoom} bands={showBands ? visibleMapBands : []} selectedBand={selectedBandId} onSelectBand={(id) => { const band = mapBandSample.find((item) => item.id === id); setSelectedBandId(id); if (band) setSelectedZone(band.zone); }} showHeatmap={showHeatmap} showGates={showGates} showCameras={showCameras} movementScenario={twinTab === "VIRTUALISATION" ? simulation?.scenario : undefined} movementTick={simulation?.tick ?? 0} movementRunning={Boolean(simulation?.running)} />
         </div>
         {twinTab === "VIRTUALISATION" ? <DigitalTwinVirtualisation state={simulation} busy={simulationBusy} error={simulationError} onCommand={runSimulationCommand} /> : null}
-        <div className="twin-map-legend"><span><i className="normal" />Normal</span><span><i className="elevated" />Elevated</span><span><i className="distressed" />Distressed</span><span><i className="offline" />Offline</span><span><i className="sos" />SOS</span><b>{showBands ? visibleMapBands.length.toLocaleString() : 0} visual sample / {DEMO_BAND_COUNT.toLocaleString()} tracked</b></div>
+        <div className="twin-map-legend"><span><i className="normal" />Normal</span><span><i className="elevated" />Elevated</span><span><i className="distressed" />Distressed</span><span><i className="offline" />Offline</span><span><i className="sos" />SOS</span></div>
       </section>
 
       <aside className="twin-live-rail">
@@ -200,7 +203,7 @@ export function DigitalTwinOperations() {
         </div>
 
         {selectedBand ? <SelectedBandPanel band={selectedBand} /> : <section className="twin-selected-zone"><span>Selected Zone</span><strong>{zone.label}</strong><small>{zone.observed.toLocaleString()} observed / risk {overallRisk(zone)}</small></section>}
-        <SegmentDistribution zone={zone} bands={TWIN_RENDER_BANDS} totalBands={DEMO_BAND_COUNT} />
+        <SegmentDistribution zone={zone} bands={TWIN_RENDER_BANDS} />
 
         {railView === "BANDS" ? <div className="twin-band-list"><header><span>Highest risk sample</span><strong>{visibleBands.length.toLocaleString()} visible / {DEMO_BAND_COUNT.toLocaleString()} tracked</strong></header>{railBands.map((band) => <button key={band.id} className={`${band.status.toLowerCase()} ${selectedBandId === band.id ? "selected" : ""}`} onClick={() => { setSelectedBandId(band.id); setSelectedZone(band.zone); }}><i /><div><strong>{band.code}</strong><span>Zone {band.zone} / S{band.segment} / {band.connectivity}</span></div><div><strong>{band.hr}</strong><span>BPM</span></div><div><strong>{band.spo2}%</strong><span>SpO2</span></div><b>{band.riskScore}<small>{band.status}</small></b></button>)}</div> : <ZoneRail zones={zones} bands={TWIN_RENDER_BANDS} totalBands={DEMO_BAND_COUNT} selectedZone={selectedZone} onSelect={(id) => { setSelectedZone(id); setZoneFilter(id); setSelectedBandId(null); }} />}
       </aside>
