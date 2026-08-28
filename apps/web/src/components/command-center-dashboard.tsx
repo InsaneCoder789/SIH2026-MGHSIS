@@ -188,7 +188,7 @@ function BowlSector({ sector, zone, selected, heatmapVisible, onSelect }: { sect
   const mid = (sector.start + sector.end) / 2;
   const label = polar(450, 330, (radii[0] + radii[1]) / 2, mid);
   const neutralFill = sector.ring === "outer" ? "#5c99ad" : sector.ring === "premium" ? "#d7d9d4" : "#d9dbd7";
-  const fill = heatmapVisible ? level === "critical" ? riskColors.critical : sector.color : neutralFill;
+  const fill = heatmapVisible ? riskColors[level] : neutralFill;
   return <g className={`bowl-sector ${selected ? "selected" : ""}`} onClick={() => onSelect(sector.zoneId)}>
     {Array.from({ length: sector.divisions }, (_, index) => {
       const size = (sector.end - sector.start) / sector.divisions;
@@ -355,6 +355,12 @@ export function StadiumTwin({ zones, selectedZone, onSelect, zoom, bands, select
   const [selectedStation, setSelectedStation] = useState<ReplacementStation | null>(null);
   const [replacementQueuedFor, setReplacementQueuedFor] = useState<string | null>(null);
   const openStation = (station: ReplacementStation) => { setSelectedStation(station); setReplacementQueuedFor(null); };
+  const premiumZoneForAngle = (angle: number) => angle < 161 ? "SPW" : angle < 199 ? "SPC" : "SPE";
+  const heatmapFill = (zoneId: string, neutral: string) => {
+    if (!showHeatmap) return neutral;
+    const zone = zones.find((item) => item.id === zoneId) ?? zones[0];
+    return riskColors[levelFor(Math.max(zone.crowdRisk, zone.integrityRisk))];
+  };
   return <div className="stadium-stage" style={{ "--stadium-zoom": zoom } as CSSProperties}>
     <svg viewBox="0 0 900 690" role="img" aria-label="Interactive cricket stadium digital twin risk heatmap">
       <defs>
@@ -375,22 +381,44 @@ export function StadiumTwin({ zones, selectedZone, onSelect, zoom, bands, select
           {Array.from({ length: 8 }, (_, index) => {
             const start = 128 + index * 13;
             const end = start + 13;
-            return <path key={`service-${index}`} d={arcPath(450, 330, 246, 292, start, end, 0.25)} className="service-wedge" />;
+            const zoneId = premiumZoneForAngle((start + end) / 2);
+            return <path
+              key={`service-${index}`}
+              d={arcPath(450, 330, 246, 292, start, end, 0.25)}
+              fill={heatmapFill(zoneId, "#dbddd9")}
+              className={`service-wedge heatmap-surface ${selectedZone === zoneId ? "selected" : ""}`}
+              onClick={() => onSelect(zoneId)}
+            />;
           })}
           {Array.from({ length: 8 }, (_, index) => {
             const start = 128 + index * 13;
             const end = start + 13;
             const mid = (start + end) / 2;
             const label = polar(450, 330, 316, mid);
-            return <g key={`bay-${index}`}>
-              <path d={arcPath(450, 330, 292, 343, start, end, 0.25)} className={`bay-wedge bay-${index % 3}`} />
+            const zoneId = premiumZoneForAngle(mid);
+            const neutral = index % 3 === 0 ? "#bea0ca" : index % 3 === 1 ? "#d2d3cf" : "#b9a2c2";
+            return <g key={`bay-${index}`} className={`heatmap-surface ${selectedZone === zoneId ? "selected" : ""}`} onClick={() => onSelect(zoneId)}>
+              <path d={arcPath(450, 330, 292, 343, start, end, 0.25)} fill={heatmapFill(zoneId, neutral)} className="bay-wedge" />
               <text x={label.x} y={label.y} textAnchor="middle" dominantBaseline="middle" transform={`rotate(${mid}, ${label.x}, ${label.y})`} className="bay-label">BAY {index + 1}</text>
             </g>;
           })}
           <g className="premium-tiers">
-            <path d={arcPath(450, 330, 343, 382, 128, 232, 0.2)} className="premium-tier tier-gallery" />
-            <path d={arcPath(450, 330, 382, 426, 128, 232, 0.2)} className="premium-tier tier-fourth" />
-            <path d={arcPath(450, 330, 426, 472, 128, 232, 0.2)} className="premium-tier tier-fifth" />
+            {[
+              { inner: 343, outer: 382, className: "tier-gallery", label: "President Gallery" },
+              { inner: 382, outer: 426, className: "tier-fourth", label: "Presidential Suites 4th Floor" },
+              { inner: 426, outer: 472, className: "tier-fifth", label: "Premium Suites 5th Floor" },
+            ].flatMap((tier) => visualSectors.filter((sector) => sector.ring === "premium").map((sector) => {
+              const zone = zones.find((item) => item.id === sector.zoneId) ?? zones[0];
+              const neutral = tier.className === "tier-gallery" ? "#1b2126" : tier.className === "tier-fourth" ? "#171c21" : "#12171b";
+              return <path
+                key={`${tier.className}-${sector.zoneId}`}
+                d={arcPath(450, 330, tier.inner, tier.outer, sector.start, sector.end, 0.2)}
+                fill={heatmapFill(sector.zoneId, neutral)}
+                className={`premium-tier heatmap-surface ${tier.className} ${selectedZone === sector.zoneId ? "selected" : ""}`}
+                aria-label={`${tier.label} - ${zone.label} - risk ${Math.max(zone.crowdRisk, zone.integrityRisk)}`}
+                onClick={() => onSelect(sector.zoneId)}
+              />;
+            }))}
             {[382, 426].map((radius) => <path key={radius} d={arcPath(450, 330, radius - 0.5, radius + 0.5, 128, 232, 0)} className="premium-tier-divider" />)}
           </g>
           <BandMapCanvas bands={bands} selectedBand={selectedBand} onSelectBand={onSelectBand} movementScenario={movementScenario} movementTick={movementTick} />

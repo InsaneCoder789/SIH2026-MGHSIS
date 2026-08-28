@@ -95,7 +95,7 @@ button { color: inherit; font: inherit; cursor: pointer; }
 .block-label { pointer-events: none; fill: #071116; font-size: 15px; font-weight: 800; letter-spacing: 0; }
 .premium-block-label { font-size: 10px; }
 .seat-number { pointer-events: none; fill: rgba(4,16,20,.82); font-size: 8px; font-weight: 700; }
-.service-wedge { fill: #dbddd9; stroke: rgba(65,73,77,.55); stroke-width: .8; }
+.service-wedge { stroke: rgba(65,73,77,.55); stroke-width: .8; }
 .bay-wedge { stroke: rgba(40,48,53,.72); stroke-width: .9; }
 .bay-0 { fill: #bea0ca; }
 .bay-1 { fill: #d2d3cf; }
@@ -108,9 +108,9 @@ button { color: inherit; font: inherit; cursor: pointer; }
 .crease { stroke: rgba(245,245,210,.72); stroke-width: 1.2; }
 .direction { fill: #08140d; font-size: 14px; font-weight: 800; text-anchor: middle; }
 .premium-tier { stroke: #59636a; stroke-width: 1.2; }
-.tier-gallery { fill: #1b2126; }
-.tier-fourth { fill: #171c21; }
-.tier-fifth { fill: #12171b; }
+.heatmap-surface { cursor: pointer; transition: filter .15s ease, opacity .15s ease, stroke .15s ease; }
+.heatmap-surface:hover { filter: brightness(1.13); }
+.heatmap-surface.selected { filter: brightness(1.18) drop-shadow(0 0 4px rgba(233,255,255,.7)); stroke: #fff; stroke-width: 1.7; }
 .premium-tier-divider { fill: #78848a; opacity: .42; }
 .premium-tier-labels { pointer-events: none; }
 .premium-label { fill: #d5d7d9; font-size: 16px; font-weight: 700; text-anchor: middle; dominant-baseline: middle; }
