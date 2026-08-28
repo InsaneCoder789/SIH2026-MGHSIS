@@ -92,7 +92,7 @@ export function DigitalTwinOperations() {
   const { scenario } = useDemoOperations();
   const isBrowser = useSyncExternalStore(subscribeToBrowser, () => true, () => false);
   const mapBandSample = useMemo(() => isBrowser ? getTwinMapBands() : [], [isBrowser]);
-  const { zones, totals } = useLiveDigitalTwin(scenario);
+  const { zones } = useLiveDigitalTwin(scenario);
   const summary = DEMO_BAND_SUMMARY;
   const [railView, setRailView] = useState<RailView>("BANDS");
   const [selectedZone, setSelectedZone] = useState("G");
@@ -166,7 +166,7 @@ export function DigitalTwinOperations() {
     <section className="twin-ops-summary">
       <div><span>Active Event</span><strong>GT vs DC - IPL 2025</strong><small><i /> Live stadium telemetry</small></div>
       <div><span>Digital Bands</span><strong>{summary.total.toLocaleString()}</strong><small>{summary.active.toLocaleString()} connected</small></div>
-      <div><span>Observed Population</span><strong>{totals.observed.toLocaleString()}</strong><small>{totals.authenticated.toLocaleString()} authenticated</small></div>
+      <div><span>Observed Population</span><strong>{summary.active.toLocaleString()}</strong><small>{summary.active.toLocaleString()} authenticated</small></div>
       <div><span>Distress Signals</span><strong className="danger">{summary.distressed + summary.sos}</strong><small>{summary.sos} SOS active</small></div>
       <div><span>Selected Zone</span><strong>{zone.label}</strong><small>Risk {overallRisk(zone)} / 100</small></div>
       <div><span>Twin Health</span><strong className="healthy"><ShieldCheck size={15} /> Synchronized</strong><small>Updated 20:34:18</small></div>
