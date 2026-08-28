@@ -7,13 +7,17 @@ from app.api.hardware import router as hardware_router
 from app.api.ml import router as ml_router
 from app.api.simulation import router as simulation_router
 from app.api.system import router as system_router
+from app.api.realtime import router as realtime_router
+from app.core.postgres_runtime import postgres_runtime
 from app.core.redis_runtime import redis_runtime
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     redis_runtime.connect()
+    postgres_runtime.connect()
     yield
+    postgres_runtime.close()
     redis_runtime.close()
 
 app = FastAPI(
@@ -34,6 +38,7 @@ app.include_router(ml_router)
 app.include_router(hardware_router)
 app.include_router(simulation_router)
 app.include_router(system_router)
+app.include_router(realtime_router)
 
 
 @app.get("/health")

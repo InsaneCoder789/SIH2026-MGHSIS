@@ -8,6 +8,7 @@ from uuid import uuid4
 from fastapi import APIRouter, HTTPException
 
 from app.core.config import settings
+from app.core.postgres_runtime import postgres_runtime
 from app.core.redis_runtime import redis_runtime
 from app.ml.schemas import HardwareObservation
 
@@ -41,6 +42,7 @@ def ingest_hardware_observation(observation: HardwareObservation) -> dict[str, o
                 **observation.model_dump(mode="json"),
             }
             _observations.append(record)
+            postgres_runtime.record_hardware_observation(record)
             if shared_lock:
                 redis_runtime.record_hardware_event(
                     sequence_key,
@@ -64,13 +66,18 @@ def recent_hardware_observations(limit: int = 50) -> dict[str, object]:
     if limit < 1 or limit > 500:
         raise HTTPException(status_code=422, detail="limit must be between 1 and 500")
     shared_records = redis_runtime.recent_json(HARDWARE_HISTORY_KEY, limit)
+    runtime = "REDIS"
+    if shared_records is None:
+        shared_records = postgres_runtime.recent_hardware_observations(limit)
+        runtime = "POSTGRESQL"
     if shared_records is None:
         with _lock:
             shared_records = list(_observations)[-limit:]
+        runtime = "LOCAL_FALLBACK"
     return {
         "count": len(shared_records),
         "observations": shared_records,
-        "shared_runtime": "REDIS" if redis_runtime.available else "LOCAL_FALLBACK",
+        "shared_runtime": runtime,
     }
 
 

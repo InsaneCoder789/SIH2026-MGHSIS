@@ -91,6 +91,7 @@ class CrowdRiskModel:
         self.artifact_path = artifact_path
         self.metrics_path = metrics_path
         self._bundle: dict[str, object] | None = None
+        self._metrics: dict[str, object] = {}
         self._lock = Lock()
 
     def load(self) -> dict[str, object]:
@@ -103,11 +104,11 @@ class CrowdRiskModel:
                     if bundle.get("feature_names") != FEATURE_NAMES:
                         raise RuntimeError("Crowd model feature contract does not match this API version")
                     self._bundle = bundle
+                    self._metrics = json.loads(self.metrics_path.read_text(encoding="utf-8")) if self.metrics_path.exists() else {}
         return self._bundle
 
     def status(self) -> dict[str, object]:
         bundle = self.load()
-        metrics = json.loads(self.metrics_path.read_text(encoding="utf-8")) if self.metrics_path.exists() else {}
         return {
             "ready": True,
             "model_version": bundle["model_version"],
@@ -116,7 +117,7 @@ class CrowdRiskModel:
             "training_rows": bundle["training_rows"],
             "testing_rows": bundle["testing_rows"],
             "split": "80/20 stratified holdout",
-            "metrics": metrics,
+            "metrics": self._metrics,
             "synthetic_only": True,
         }
 

@@ -1,7 +1,9 @@
 from fastapi.testclient import TestClient
+from unittest.mock import patch
 from uuid import uuid4
 
 from app.main import app
+from app.ml.model import crowd_risk_model
 
 client = TestClient(app)
 
@@ -61,6 +63,15 @@ def test_congested_zone_scores_above_normal_zone() -> None:
     assert congested["advisory_only"] is True
 
 
+def test_batch_endpoint_uses_one_vectorized_model_call() -> None:
+    original_predict_many = crowd_risk_model.predict_many
+    with patch.object(crowd_risk_model, "predict_many", wraps=original_predict_many) as predict_many:
+        response = client.post("/api/v1/ml/crowd-risk/predict/batch", json=[observation(zone_id="G"), observation(zone_id="F")])
+    assert response.status_code == 200
+    assert len(response.json()) == 2
+    predict_many.assert_called_once()
+
+
 def test_hardware_ingestion_rejects_replayed_sequence() -> None:
     payload = {
         "source_id": f"gateway-test-{uuid4()}",
@@ -82,5 +93,5 @@ def test_system_health_exposes_real_runtime_dependencies() -> None:
     assert response.status_code == 200
     body = response.json()
     names = {service["name"] for service in body["services"]}
-    assert {"Event API", "Redis Shared Runtime", "Crowd Risk Model", "Simulation State", "Hardware Event Stream"} <= names
+    assert {"Event API", "Redis Shared Runtime", "PostgreSQL Event History", "Crowd Risk Model", "Simulation State", "Hardware Event Stream"} <= names
     assert body["status"] in {"READY", "DEGRADED"}

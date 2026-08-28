@@ -32,7 +32,10 @@ def predict_crowd_risk(observation: CrowdObservation) -> CrowdRiskPrediction:
 def predict_crowd_risk_batch(observations: list[CrowdObservation]) -> list[CrowdRiskPrediction]:
     if not observations or len(observations) > 500:
         raise HTTPException(status_code=422, detail="Batch size must be between 1 and 500 observations")
-    return [_predict(observation) for observation in observations]
+    try:
+        return crowd_risk_model.predict_many(observations)
+    except FileNotFoundError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
 
 
 @router.get("/demo-zones", response_model=list[CrowdRiskPrediction])
@@ -63,4 +66,4 @@ def demo_zone_predictions() -> list[CrowdRiskPrediction]:
             cctv_confidence=0.93,
             gateway_health=0.96,
         ))
-    return [_predict(observation) for observation in observations]
+    return crowd_risk_model.predict_many(observations)

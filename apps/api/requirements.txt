@@ -1,6 +1,7 @@
 fastapi==0.118.2
 uvicorn[standard]==0.38.0
 pydantic==2.12.5
+pydantic-settings==2.11.0
 redis==7.1.0
 psycopg[binary]==3.3.2
 numpy==2.5.2

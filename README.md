@@ -66,7 +66,7 @@ Recommended local ports from `MASTER.md`:
 
 - Web: `3000`
 - API: `8000`
-- PostgreSQL: `5432`
+- PostgreSQL: `5433` on the host (`5432` inside Docker)
 - Redis: `6379`
 
 ## Demo Scenarios

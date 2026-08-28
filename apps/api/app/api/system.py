@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
 
+from app.core.postgres_runtime import postgres_runtime
 from app.core.redis_runtime import redis_runtime
 from app.ml.model import crowd_risk_model
 
@@ -10,6 +11,7 @@ router = APIRouter(prefix="/api/v1/system", tags=["system-runtime"])
 
 def runtime_health() -> dict[str, object]:
     redis_service = redis_runtime.diagnostics()
+    postgres_service = postgres_runtime.diagnostics()
     try:
         crowd_risk_model.status()
         model_service = {
@@ -42,6 +44,7 @@ def runtime_health() -> dict[str, object]:
             "detail": "FastAPI request and validation layer",
         },
         redis_service,
+        postgres_service,
         model_service,
         {
             "name": "Simulation State",
