@@ -3,12 +3,14 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 EventType = Literal["CRICKET_STADIUM", "CONCERT", "PILGRIMAGE"]
 
 
 class CrowdObservation(BaseModel):
+    model_config = ConfigDict(allow_inf_nan=False)
+
     event_id: str = "demo"
     zone_id: str = Field(min_length=1, max_length=24)
     event_type: EventType = "CRICKET_STADIUM"
@@ -69,4 +71,3 @@ class HardwareObservation(BaseModel):
     captured_at: datetime
     sequence: int = Field(ge=0)
     payload: dict[str, float | int | str | bool | None]
-

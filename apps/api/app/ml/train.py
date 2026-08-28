@@ -72,6 +72,7 @@ def train(rows: int, seed: int, dataset_path: Path, artifact_path: Path, metrics
         "model_type": "HistGradientBoostingClassifier",
         "feature_names": FEATURE_NAMES,
         "risk_labels": RISK_LABELS,
+        "class_ids": [int(value) for value in model.classes_],
         "training_rows": int(len(train_y)),
         "testing_rows": int(len(test_y)),
         "seed": seed,
@@ -97,4 +98,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

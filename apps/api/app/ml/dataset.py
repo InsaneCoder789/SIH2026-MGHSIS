@@ -8,7 +8,7 @@ import numpy as np
 
 from .features import FEATURE_NAMES, RISK_LABELS
 
-DATASET_VERSION = "crowd-risk-synthetic-v1"
+DATASET_VERSION = "crowd-risk-synthetic-v2"
 DEFAULT_SEED = 26206
 
 
@@ -40,7 +40,8 @@ def generate_crowd_dataset(rows: int = 100_000, seed: int = DEFAULT_SEED) -> tup
 
     inflow = np.clip(rng.normal(12 + regime * 13, 9), 0, 105)
     outflow = np.clip(rng.normal(18 + (3 - regime) * 5, 9), 0, 95)
-    accumulation = inflow - outflow + rng.normal(0, 2.2, rows)
+    # Keep this derived feature identical to inference-time calculation.
+    accumulation = inflow - outflow
     route_width = np.clip(rng.lognormal(mean=1.25, sigma=0.42, size=rows), 1.1, 12.0)
     exits = np.clip(np.rint(area / 650 + rng.normal(1.8, 0.8, rows)), 1, 8).astype(int)
 
@@ -65,7 +66,7 @@ def generate_crowd_dataset(rows: int = 100_000, seed: int = DEFAULT_SEED) -> tup
     capacity_score = _clamp((utilization - 0.50) / 0.75 * 100)
     accumulation_score = _clamp((accumulation + 8) / 50 * 100)
     slowdown_score = _clamp(speed_drop * 100)
-    cluster_score = _clamp(falls * 13 + sos * 10)
+    cluster_score = _clamp(falls * 15 + sos * 13)
     bottleneck_score = _clamp((5.0 - route_width) / 4.0 * 70 + (3 - exits) * 9)
     vulnerability_score = _clamp(elderly_share * 40 + child_share * 28 + mobility_share * 90)
     heat_score = _clamp((heat_index - 30) / 16 * 100)
@@ -80,9 +81,21 @@ def generate_crowd_dataset(rows: int = 100_000, seed: int = DEFAULT_SEED) -> tup
         + vulnerability_score * 0.06
         + heat_score * 0.05
     )
+    severe_capacity_congestion = (utilization >= 1.20) & (accumulation >= 18) & (speed <= 0.55)
+    severe_density_congestion = (utilization >= 1.08) & (density >= 3.5) & (accumulation >= 25) & (speed <= 0.45)
+    severe_congestion = severe_capacity_congestion | severe_density_congestion
+    severe_distress_cluster = (falls + sos) >= 7
+    high_congestion = (utilization >= 1.00) & (accumulation >= 10) & (speed <= 0.75)
+    high_distress_cluster = (falls + sos) >= 4
+    safety_floor = np.select(
+        [severe_congestion | severe_distress_cluster, high_congestion | high_distress_cluster],
+        [82.0, 64.0],
+        default=0.0,
+    )
+    latent_score = np.maximum(latent_score, safety_floor)
     confidence_penalty = (1 - cctv_confidence) * 8 + (1 - gateway_health) * 7
     event_modifier = (event_type == 2) * 2.0 + (event_type == 1) * 1.0
-    observed_score = _clamp(latent_score + confidence_penalty + event_modifier + rng.normal(0, 6.8, rows))
+    observed_score = _clamp(latent_score + confidence_penalty + event_modifier + rng.normal(0, 5.2, rows))
 
     labels = np.select(
         [observed_score < 30, observed_score < 55, observed_score < 75],
@@ -129,4 +142,3 @@ def write_dataset(path: Path, rows: int = 100_000, seed: int = DEFAULT_SEED) -> 
     manifest_path = path.parent / "crowd-risk-dataset-manifest.json"
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     return manifest
-

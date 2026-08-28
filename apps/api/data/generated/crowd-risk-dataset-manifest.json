@@ -1,5 +1,5 @@
 {
-  "dataset_version": "crowd-risk-synthetic-v1",
+  "dataset_version": "crowd-risk-synthetic-v2",
   "rows": 100000,
   "seed": 26206,
   "features": [
@@ -28,12 +28,12 @@
   ],
   "target": "risk_class",
   "class_distribution": {
-    "LOW": 44520,
-    "MODERATE": 31358,
-    "HIGH": 18400,
-    "CRITICAL": 5722
+    "LOW": 33036,
+    "MODERATE": 11832,
+    "HIGH": 33826,
+    "CRITICAL": 21306
   },
-  "sha256": "bd547f6c4a9630251cb918844d08d743c62b4380978efc1fb113b87b6235fd78",
+  "sha256": "51b576d17feb417d93c0c09e93c6a0175cf4fd3794036e7b7cb9900fd3cade19",
   "synthetic_only": true,
   "intended_use": "Software pipeline development and demonstration; not real-world safety certification."
 }

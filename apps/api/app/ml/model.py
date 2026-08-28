@@ -103,6 +103,12 @@ class CrowdRiskModel:
                     bundle = joblib.load(self.artifact_path)
                     if bundle.get("feature_names") != FEATURE_NAMES:
                         raise RuntimeError("Crowd model feature contract does not match this API version")
+                    if bundle.get("risk_labels") != RISK_LABELS:
+                        raise RuntimeError("Crowd model risk-label contract does not match this API version")
+                    model = bundle.get("model")
+                    model_classes = [int(value) for value in getattr(model, "classes_", [])]
+                    if model_classes != list(range(len(RISK_LABELS))):
+                        raise RuntimeError("Crowd model probability classes are incomplete or out of order")
                     self._bundle = bundle
                     self._metrics = json.loads(self.metrics_path.read_text(encoding="utf-8")) if self.metrics_path.exists() else {}
         return self._bundle
@@ -122,7 +128,9 @@ class CrowdRiskModel:
         }
 
     def _prediction_from_probabilities(self, observation: CrowdObservation, probabilities_raw: np.ndarray, bundle: dict[str, object]) -> CrowdRiskPrediction:
-        probabilities = {RISK_LABELS[index]: float(probabilities_raw[index]) for index in range(len(RISK_LABELS))}
+        model = bundle["model"]
+        class_probabilities = {int(class_id): float(value) for class_id, value in zip(model.classes_, probabilities_raw, strict=True)}
+        probabilities = {label: class_probabilities[index] for index, label in enumerate(RISK_LABELS)}
         level = max(probabilities, key=probabilities.get)  # type: ignore[arg-type]
         score = sum(probabilities[label] * RISK_MIDPOINTS[label] for label in RISK_LABELS)
         accumulation = observation.inflow_per_min - observation.outflow_per_min
@@ -142,9 +150,13 @@ class CrowdRiskModel:
         )
 
     def predict_many(self, observations: list[CrowdObservation]) -> list[CrowdRiskPrediction]:
+        if not observations:
+            return []
         bundle = self.load()
         model = bundle["model"]
         matrix = np.vstack([observation_to_features(observation)[0] for observation in observations])
+        if not np.isfinite(matrix).all():
+            raise ValueError("Crowd observation features must all be finite numbers")
         return [self._prediction_from_probabilities(observation, probabilities, bundle) for observation, probabilities in zip(observations, model.predict_proba(matrix), strict=True)]
 
     def predict(self, observation: CrowdObservation) -> CrowdRiskPrediction:

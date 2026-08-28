@@ -63,6 +63,33 @@ def test_congested_zone_scores_above_normal_zone() -> None:
     assert congested["advisory_only"] is True
 
 
+def test_extreme_congestion_and_distress_clusters_escalate() -> None:
+    extreme = client.post("/api/v1/ml/crowd-risk/predict", json=observation(
+        current_count=2_100,
+        safe_capacity=1_500,
+        inflow_per_min=72,
+        outflow_per_min=12,
+        average_speed_mps=0.3,
+        route_width_m=2.0,
+        exit_count=1,
+    )).json()
+    cluster = client.post("/api/v1/ml/crowd-risk/predict", json=observation(
+        fall_cluster_5m=4,
+        sos_cluster_5m=4,
+    )).json()
+    assert extreme["level"] == "CRITICAL"
+    assert extreme["score"] >= 75
+    assert cluster["level"] == "CRITICAL"
+    assert "DISPATCH_MEDICAL" in cluster["recommended_actions"]
+
+
+def test_non_finite_observations_are_rejected() -> None:
+    payload = observation()
+    payload["area_m2"] = "NaN"
+    response = client.post("/api/v1/ml/crowd-risk/predict", json=payload)
+    assert response.status_code == 422
+
+
 def test_batch_endpoint_uses_one_vectorized_model_call() -> None:
     original_predict_many = crowd_risk_model.predict_many
     with patch.object(crowd_risk_model, "predict_many", wraps=original_predict_many) as predict_many:

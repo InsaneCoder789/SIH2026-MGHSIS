@@ -12,4 +12,4 @@ def test_dataset_is_reproducible_and_contains_all_risk_classes() -> None:
     assert np.array_equal(scores_a, scores_b)
     counts = np.bincount(labels_a, minlength=4)
     assert np.all(counts > 50)
-
+    assert np.allclose(features_a[:, 8], features_a[:, 6] - features_a[:, 7])

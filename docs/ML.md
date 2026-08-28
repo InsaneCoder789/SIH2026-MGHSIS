@@ -16,7 +16,7 @@ The model receives spatial capacity, current count, density, inflow, outflow, ac
 
 The current artifact is a scikit-learn `HistGradientBoostingClassifier`. The API converts class probabilities into an advisory 0-100 score, confidence, trend, ranked reasons, and recommended actions. Safety review exposes critical recall separately from headline accuracy.
 
-The current synthetic holdout report in `apps/api/artifacts/crowd-risk-metrics.json` is 80.78% accuracy, 75.69% macro F1, 78.76% critical recall, and 0.4316 multiclass log loss. These figures measure recovery of the synthetic generator only. A field pilot, calibrated sensors, temporal validation, drift monitoring, independent safety review, and a human-in-the-loop procedure are required before operational deployment.
+The current synthetic holdout report in `apps/api/artifacts/crowd-risk-metrics.json` is 90.79% accuracy, 89.05% macro F1, 87.28% critical recall, and 0.2745 multiclass log loss. The v2 dataset removes training-serving skew from the accumulation feature and includes explicit severe-congestion, density-flow-collapse, and distress-cluster examples. These figures measure recovery of the synthetic generator only. A field pilot, calibrated sensors, temporal validation, drift monitoring, independent safety review, and a human-in-the-loop procedure are required before operational deployment.
 
 ## Real-scenario virtualisation
 
