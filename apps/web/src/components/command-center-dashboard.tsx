@@ -6,7 +6,7 @@ import {
   Hand, HeartPulse, ListFilter, LocateFixed, LockKeyhole, Minus, MousePointer2,
   Plus, Radio, RotateCcw, ShieldCheck, Siren, Users, UsersRound, Wind,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { useDemoOperations } from "@/components/demo-operations-context";
 import { OperationsHeader } from "@/components/operations-header";
 import { getTwinMapBands, type TwinMapBand } from "@/lib/bands";
@@ -247,18 +247,20 @@ function BandMapCanvas({ bands, selectedBand, onSelectBand, movementScenario, mo
   movementScenario?: string;
   movementTick: number;
 }) {
+  const canvasWidth = 900;
+  const canvasHeight = 820;
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const pixelRatio = 1;
-    canvas.width = 900 * pixelRatio;
-    canvas.height = 820 * pixelRatio;
+    canvas.width = canvasWidth * pixelRatio;
+    canvas.height = canvasHeight * pixelRatio;
     const context = canvas.getContext("2d");
     if (!context) return;
     context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
-    context.clearRect(0, 0, 900, 820);
+    context.clearRect(0, 0, canvasWidth, canvasHeight);
 
     const colors = { NORMAL: "#48cf82", ELEVATED: "#e1c326", OFFLINE: "#778186", DISTRESSED: "#ed4a37", SOS: "#ed4a37" } as const;
     const grouped: Record<keyof typeof colors, TwinMapBand[]> = { NORMAL: [], ELEVATED: [], OFFLINE: [], DISTRESSED: [], SOS: [] };
@@ -282,22 +284,42 @@ function BandMapCanvas({ bands, selectedBand, onSelectBand, movementScenario, mo
     const selected = bands.find((band) => band.id === selectedBand);
     if (selected) {
       const offset = virtualBandOffset(selected, movementScenario, movementTick);
+      const selectedX = selected.dotPositionX + offset.x;
+      const selectedY = selected.dotPositionY + offset.y;
       context.beginPath();
-      context.arc(selected.dotPositionX + offset.x, selected.dotPositionY + offset.y, 4.2, 0, Math.PI * 2);
+      context.arc(selectedX, selectedY, 6.2, 0, Math.PI * 2);
       context.fillStyle = colors[selected.status];
       context.fill();
       context.strokeStyle = "#ffffff";
-      context.lineWidth = 1.5;
+      context.lineWidth = 2;
       context.stroke();
-    }
-  }, [bands, movementScenario, movementTick, selectedBand]);
 
-  const selectNearestBand = (event: MouseEvent<HTMLCanvasElement>) => {
+      const labelWidth = 96;
+      const labelHeight = 27;
+      const labelX = Math.min(canvasWidth - labelWidth - 4, Math.max(4, selectedX + 10));
+      const labelY = Math.min(canvasHeight - labelHeight - 4, Math.max(4, selectedY - 14));
+      context.fillStyle = "rgba(7, 20, 23, .96)";
+      context.strokeStyle = "#5fd7ca";
+      context.lineWidth = 1;
+      context.fillRect(labelX, labelY, labelWidth, labelHeight);
+      context.strokeRect(labelX, labelY, labelWidth, labelHeight);
+      context.fillStyle = "#e7f3f2";
+      context.font = "700 8px sans-serif";
+      context.fillText(selected.code, labelX + 6, labelY + 11);
+      context.fillStyle = "#77aaa6";
+      context.font = "600 6px sans-serif";
+      context.fillText(`ZONE ${selected.zone} / RISK ${selected.riskScore}`, labelX + 6, labelY + 21);
+    }
+  }, [bands, canvasHeight, canvasWidth, movementScenario, movementTick, selectedBand]);
+
+  const selectNearestBand = (event: ReactPointerEvent<HTMLCanvasElement>) => {
     const bounds = event.currentTarget.getBoundingClientRect();
-    const x = (event.clientX - bounds.left) * (900 / bounds.width);
-    const y = (event.clientY - bounds.top) * (690 / bounds.height);
+    if (bounds.width === 0 || bounds.height === 0) return;
+    const x = (event.clientX - bounds.left) * (canvasWidth / bounds.width);
+    const y = (event.clientY - bounds.top) * (canvasHeight / bounds.height);
     let nearest: TwinMapBand | undefined;
-    let nearestDistance = 7 * 7;
+    const hitRadius = event.pointerType === "touch" ? 18 : event.pointerType === "pen" ? 13 : 10;
+    let nearestDistance = hitRadius * hitRadius;
     for (const band of bands) {
       const offset = virtualBandOffset(band, movementScenario, movementTick);
       const distance = (band.dotPositionX + offset.x - x) ** 2 + (band.dotPositionY + offset.y - y) ** 2;
@@ -310,7 +332,7 @@ function BandMapCanvas({ bands, selectedBand, onSelectBand, movementScenario, mo
   };
 
   return <foreignObject x="0" y="0" width="900" height="820" className="band-map-canvas-layer">
-    <canvas ref={canvasRef} onClick={selectNearestBand} aria-label={`${bands.length} interactive safety bands visible`} />
+    <canvas ref={canvasRef} onPointerUp={selectNearestBand} aria-label={`${bands.length} selectable safety bands visible across every stadium tier`} />
   </foreignObject>;
 }
 
