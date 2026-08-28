@@ -13,7 +13,7 @@ import { BAND_ZONES, DEMO_BAND_COUNT, DEMO_BAND_SUMMARY, TWIN_RENDER_BANDS, ZONE
 import { levelFor, overallRisk, type Zone } from "@/lib/mghsis-demo";
 import { useLiveDigitalTwin } from "@/lib/use-live-digital-twin";
 
-type RailView = "BANDS" | "ZONES";
+type RailView = "BANDS" | "ZONES" | "VIRTUALISATION";
 type StatusFilter = "ALL" | BandStatus;
 const subscribeToBrowser = () => () => undefined;
 type TwinSimulationState = {
@@ -34,16 +34,22 @@ async function simulationCommand(body: Record<string, string>) {
 function DigitalTwinVirtualisation({ state, busy, error, onCommand }: { state: TwinSimulationState | null; busy: boolean; error: string; onCommand: (body: Record<string, string>) => void }) {
   const highest = state?.zones.toSorted((a, b) => b.prediction.score - a.prediction.score).slice(0, 4) ?? [];
   const scenario = state?.scenario ?? "normal";
+  const scenarios = [
+    { id: "congestion", label: "Crowd surge" },
+    { id: "distress", label: "Wearer distress" },
+    { id: "breach", label: "Gate breach" },
+    { id: "gateway", label: "Gateway outage" },
+  ];
   return <section className={`digital-twin-virtualisation scenario-${scenario}`}>
-    <header><div><p className="eyebrow">Scenario Projection On Twin</p><h2>{scenario.replaceAll("_", " ")}</h2></div><span className={state?.running ? "running" : ""}>{busy ? "UPDATING" : state?.running ? "RUNNING" : "PAUSED"}</span></header>
+    <header><div><p className="eyebrow">Scenario Projection</p><h2>{scenarios.find((item) => item.id === scenario)?.label ?? "Ready to simulate"}</h2></div><span className={state?.running ? "running" : ""}>{busy ? "UPDATING" : state?.running ? "RUNNING" : "PAUSED"}</span></header>
     <div className="virtualisation-scenarios">
-      {["congestion", "distress", "breach", "gateway"].map((item) => <button key={item} className={scenario === item ? "active" : ""} disabled={busy} onClick={() => onCommand({ command: "scenario", scenario: item })}>{item}</button>)}
+      {scenarios.map((item) => <button key={item.id} className={scenario === item.id ? "active" : ""} disabled={busy} onClick={() => onCommand({ command: "scenario", scenario: item.id })}>{item.label}</button>)}
     </div>
     <div className="virtualisation-process" aria-label="Virtualisation processing stages"><span className={state ? "complete" : "active"}>Observe</span><i /><span className={state ? "complete" : ""}>Predict</span><i /><span className={state ? "active" : ""}>Project</span><i /><span className={state?.active_action ? "complete" : ""}>Respond</span></div>
     <div className="virtualisation-summary"><div><small>Virtual tick</small><strong>{state?.tick ?? "--"}</strong></div><div><small>Peak score</small><strong>{state ? state.aggregate.peak_score.toFixed(1) : "--"}</strong></div><div><small>High+</small><strong>{state?.aggregate.high_or_above ?? "--"}</strong></div><div><small>Critical</small><strong>{state?.aggregate.critical_zones ?? "--"}</strong></div></div>
     <div className="virtualisation-zones">{highest.map((item) => <article key={item.prediction.zone_id}><div><b>{item.prediction.zone_id}</b><span>{item.prediction.level} / {item.prediction.trend}</span></div><i><em className={item.prediction.level.toLowerCase()} style={{ width: `${Math.min(100, item.prediction.score)}%` }} /></i><strong>{item.prediction.score.toFixed(0)}</strong></article>)}</div>
     {error ? <p className="virtualisation-error">{error}</p> : <p className="virtualisation-movement"><Activity size={12} />{state?.running ? "Movement layer advances with every virtual tick" : "Run the clock to animate projected crowd flow"}</p>}
-    <footer><button disabled={busy || !state} onClick={() => onCommand({ command: state?.running ? "pause" : "start" })}>{state?.running ? <Pause size={13} /> : <Play size={13} />}{state?.running ? "Pause" : "Run"}</button><button disabled={busy || !state} onClick={() => onCommand({ command: "action", action: "REDIRECT_TO_ZONE", zone_id: "G" })}><LocateFixed size={13} />Redirect G</button><button disabled={busy || !state} onClick={() => onCommand({ command: "reset" })}>Reset</button></footer>
+    <footer><button disabled={busy || !state} onClick={() => onCommand({ command: state?.running ? "pause" : "start" })}>{state?.running ? <Pause size={13} /> : <Play size={13} />}{state?.running ? "Pause projection" : "Run projection"}</button><button disabled={busy || !state} onClick={() => onCommand({ command: "action", action: "REDIRECT_TO_ZONE", zone_id: "G" })}><LocateFixed size={13} />Redirect Zone G</button><button disabled={busy || !state} onClick={() => onCommand({ command: "reset" })}>Reset</button></footer>
   </section>;
 }
 
@@ -107,13 +113,12 @@ export function DigitalTwinOperations() {
   const [showGates, setShowGates] = useState(true);
   const [showCameras, setShowCameras] = useState(true);
   const [distressOnly, setDistressOnly] = useState(false);
-  const [twinTab, setTwinTab] = useState<"LIVE" | "VIRTUALISATION">("LIVE");
   const [simulation, setSimulation] = useState<TwinSimulationState | null>(null);
   const [simulationBusy, setSimulationBusy] = useState(false);
   const [simulationError, setSimulationError] = useState("");
 
   useEffect(() => {
-    if (twinTab !== "VIRTUALISATION") return;
+    if (railView !== "VIRTUALISATION") return;
     const inFlight = { current: false };
     const load = () => {
       if (inFlight.current) return;
@@ -123,12 +128,13 @@ export function DigitalTwinOperations() {
     load();
     const timer = window.setInterval(load, 2500);
     return () => window.clearInterval(timer);
-  }, [twinTab]);
+  }, [railView]);
   const virtualZones = zones.map((item) => {
     const live = simulation?.zones.find((zoneItem) => zoneItem.prediction.zone_id === item.id);
     return live ? { ...item, crowdRisk: live.prediction.score, observed: live.observation.current_count, inflow: live.observation.inflow_per_min, outflow: live.observation.outflow_per_min, gatewayHealth: live.observation.gateway_health } : item;
   });
-  const displayZones = twinTab === "VIRTUALISATION" ? virtualZones : zones;
+  const isVirtualisation = railView === "VIRTUALISATION";
+  const displayZones = isVirtualisation ? virtualZones : zones;
 
   const searchedBand = useMemo(() => {
     const parsed = Number(deferredQuery.replace(/^wb-/i, ""));
@@ -175,7 +181,6 @@ export function DigitalTwinOperations() {
     <div className="twin-ops-layout">
       <section className="twin-ops-map">
         <div className="twin-map-toolbar">
-          <div className="twin-digital-view-tabs"><button className={twinTab === "LIVE" ? "active" : ""} onClick={() => setTwinTab("LIVE")}><Activity size={14} />Live Twin</button><button className={twinTab === "VIRTUALISATION" ? "active" : ""} onClick={() => setTwinTab("VIRTUALISATION")}><Play size={14} />Virtualisation</button></div>
           <div className="twin-map-zoom"><button title="Zoom out" onClick={() => setZoom((value) => Math.max(.82, value - .05))}><Minus size={16} /></button><strong>{Math.round(zoom * 100)}%</strong><button title="Zoom in" onClick={() => setZoom((value) => Math.min(1.2, value + .05))}><Plus size={16} /></button><button title="Fit stadium" onClick={() => setZoom(1)}><LocateFixed size={16} /></button></div>
           <div className="twin-map-layers">
             <LayerButton active={showBands} label="Bands" title="Show or hide bands" onClick={() => setShowBands((value) => !value)}>{showBands ? <Eye size={15} /> : <EyeOff size={15} />}</LayerButton>
@@ -186,16 +191,15 @@ export function DigitalTwinOperations() {
           </div>
         </div>
         <div className="twin-ops-map-stage">
-          <StadiumTwin zones={displayZones} selectedZone={selectedZone} onSelect={(id) => { setSelectedZone(id); setSelectedBandId(null); }} zoom={zoom} bands={showBands ? visibleMapBands : []} selectedBand={selectedBandId} onSelectBand={(id) => { const band = mapBandSample.find((item) => item.id === id); setSelectedBandId(id); if (band) setSelectedZone(band.zone); }} showHeatmap={showHeatmap} showGates={showGates} showCameras={showCameras} movementScenario={twinTab === "VIRTUALISATION" ? simulation?.scenario : undefined} movementTick={simulation?.tick ?? 0} movementRunning={Boolean(simulation?.running)} />
+          <StadiumTwin zones={displayZones} selectedZone={selectedZone} onSelect={(id) => { setSelectedZone(id); setSelectedBandId(null); }} zoom={zoom} bands={showBands ? visibleMapBands : []} selectedBand={selectedBandId} onSelectBand={(id) => { const band = mapBandSample.find((item) => item.id === id); setSelectedBandId(id); if (band) setSelectedZone(band.zone); }} showHeatmap={showHeatmap} showGates={showGates} showCameras={showCameras} movementScenario={isVirtualisation ? simulation?.scenario : undefined} movementTick={simulation?.tick ?? 0} movementRunning={Boolean(simulation?.running)} />
         </div>
-        {twinTab === "VIRTUALISATION" ? <DigitalTwinVirtualisation state={simulation} busy={simulationBusy} error={simulationError} onCommand={runSimulationCommand} /> : null}
         <div className="twin-map-legend"><span><i className="normal" />Normal</span><span><i className="elevated" />Elevated</span><span><i className="distressed" />Distressed</span><span><i className="offline" />Offline</span><span><i className="sos" />SOS</span></div>
       </section>
 
       <aside className="twin-live-rail">
-        <header><div><p className="eyebrow">Venue Intelligence</p><h1>Live Twin Data</h1></div><Activity size={18} /></header>
-        <div className="twin-rail-tabs"><button className={railView === "BANDS" ? "active" : ""} onClick={() => setRailView("BANDS")}><Watch size={14} />Bands</button><button className={railView === "ZONES" ? "active" : ""} onClick={() => setRailView("ZONES")}><UsersRound size={14} />Zones</button></div>
-        <div className="twin-rail-filters">
+        <header><div><p className="eyebrow">Venue Intelligence</p><h1>{isVirtualisation ? "Twin Virtualisation" : "Live Twin Data"}</h1></div>{isVirtualisation ? <Play size={18} /> : <Activity size={18} />}</header>
+        <div className="twin-rail-tabs"><button className={railView === "BANDS" ? "active" : ""} onClick={() => setRailView("BANDS")}><Watch size={14} />Bands</button><button className={railView === "ZONES" ? "active" : ""} onClick={() => setRailView("ZONES")}><UsersRound size={14} />Zones</button><button className={isVirtualisation ? "active" : ""} onClick={() => setRailView("VIRTUALISATION")}><Play size={14} />Virtualisation</button></div>
+        {!isVirtualisation ? <><div className="twin-rail-filters">
           <label><Search size={14} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search band ID" aria-label="Search live bands" /></label>
           <select value={zoneFilter} onChange={(event) => { setZoneFilter(event.target.value); if (event.target.value !== "ALL") setSelectedZone(event.target.value); }} aria-label="Filter live bands by zone"><option value="ALL">All zones</option>{BAND_ZONES.map((item) => <option key={item} value={item}>Zone {item}</option>)}</select>
           <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)} aria-label="Filter live bands by status">{["ALL","NORMAL","ELEVATED","DISTRESSED","OFFLINE","SOS"].map((item) => <option key={item}>{item}</option>)}</select>
@@ -205,7 +209,7 @@ export function DigitalTwinOperations() {
         {selectedBand ? <SelectedBandPanel band={selectedBand} /> : <section className="twin-selected-zone"><span>Selected Zone</span><strong>{zone.label}</strong><small>{zone.observed.toLocaleString()} observed / risk {overallRisk(zone)}</small></section>}
         <SegmentDistribution zone={zone} bands={TWIN_RENDER_BANDS} />
 
-        {railView === "BANDS" ? <div className="twin-band-list"><header><span>Highest risk bands</span><strong>Live priority records</strong></header>{railBands.map((band) => <button key={band.id} className={`${band.status.toLowerCase()} ${selectedBandId === band.id ? "selected" : ""}`} onClick={() => { setSelectedBandId(band.id); setSelectedZone(band.zone); }}><i /><div><strong>{band.code}</strong><span>Zone {band.zone} / S{band.segment} / {band.connectivity}</span></div><div><strong>{band.hr}</strong><span>BPM</span></div><div><strong>{band.spo2}%</strong><span>SpO2</span></div><b>{band.riskScore}<small>{band.status}</small></b></button>)}</div> : <ZoneRail zones={zones} bands={TWIN_RENDER_BANDS} totalBands={DEMO_BAND_COUNT} selectedZone={selectedZone} onSelect={(id) => { setSelectedZone(id); setZoneFilter(id); setSelectedBandId(null); }} />}
+        {railView === "BANDS" ? <div className="twin-band-list"><header><span>Highest risk bands</span><strong>Live priority records</strong></header>{railBands.map((band) => <button key={band.id} className={`${band.status.toLowerCase()} ${selectedBandId === band.id ? "selected" : ""}`} onClick={() => { setSelectedBandId(band.id); setSelectedZone(band.zone); }}><i /><div><strong>{band.code}</strong><span>Zone {band.zone} / S{band.segment} / {band.connectivity}</span></div><div><strong>{band.hr}</strong><span>BPM</span></div><div><strong>{band.spo2}%</strong><span>SpO2</span></div><b>{band.riskScore}<small>{band.status}</small></b></button>)}</div> : <ZoneRail zones={zones} bands={TWIN_RENDER_BANDS} totalBands={DEMO_BAND_COUNT} selectedZone={selectedZone} onSelect={(id) => { setSelectedZone(id); setZoneFilter(id); setSelectedBandId(null); }} />}</> : <DigitalTwinVirtualisation state={simulation} busy={simulationBusy} error={simulationError} onCommand={runSimulationCommand} />}
       </aside>
     </div>
   </main>;
