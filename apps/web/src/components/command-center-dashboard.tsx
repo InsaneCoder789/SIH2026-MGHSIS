@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import {
-  Activity, AlertTriangle, BatteryCharging, CloudSun, Construction, Crosshair,
+  Activity, AlertTriangle, CloudSun, Construction, Crosshair,
   Hand, HeartPulse, ListFilter, LocateFixed, LockKeyhole, Minus, MousePointer2,
   Plus, Radio, RotateCcw, ShieldCheck, Siren, Users, UsersRound, Wind,
 } from "lucide-react";
@@ -36,6 +36,19 @@ type ReplacementStation = {
   chargingSlots: number;
   technicians: number;
 };
+
+function BatteryChargingGlyph({ x, y }: { x: number; y: number }) {
+  return <g
+    className="replacement-station-card-icon"
+    transform={`translate(${x} ${y}) scale(.83)`}
+    aria-hidden="true"
+  >
+    <path d="m11 7-3 5h4l-3 5" />
+    <path d="M14.856 6H16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.935" />
+    <path d="M22 14v-4" />
+    <path d="M5.14 18H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h2.936" />
+  </g>;
+}
 
 const scenarioControls: Array<{ id: Scenario; label: string; icon: typeof Siren; tone: string }> = [
   { id: "distress", label: "Distress", icon: Siren, tone: "danger" },
@@ -319,6 +332,7 @@ export function StadiumTwin({ zones, selectedZone, onSelect, zoom, bands, select
   const sectionTicks = useMemo(() => Array.from({ length: 52 }, (_, index) => index * (360 / 52)), []);
   const [selectedStation, setSelectedStation] = useState<ReplacementStation | null>(null);
   const [replacementQueuedFor, setReplacementQueuedFor] = useState<string | null>(null);
+  const openStation = (station: ReplacementStation) => { setSelectedStation(station); setReplacementQueuedFor(null); };
   return <div className="stadium-stage" style={{ "--stadium-zoom": zoom } as CSSProperties}>
     <svg viewBox="0 0 900 690" role="img" aria-label="Interactive cricket stadium digital twin risk heatmap">
       <defs>
@@ -386,27 +400,30 @@ export function StadiumTwin({ zones, selectedZone, onSelect, zoom, bands, select
           return <g key={station.gate} className="replacement-station-beacon">
             <path d={`M ${startX} ${cardMidY} L ${elbowX} ${cardMidY} L ${endX} ${gate.y}`} className="replacement-station-leader" markerEnd="url(#replacementStationArrow)" />
             <circle cx={endX} cy={gate.y} r="3" className="replacement-station-anchor" />
-            <foreignObject x={station.cardX} y={station.cardY} width="148" height="50" className="replacement-station-object">
-              <button type="button" className={selectedStation?.gate === station.gate ? "active" : ""} onClick={() => { setSelectedStation(station); setReplacementQueuedFor(null); }} aria-label={`Open ${station.gate} band replacement station`}>
-                <BatteryCharging size={18} /><span><b>{station.gate} Band Station</b><small>{station.readyBands} replacements ready</small></span>
-              </button>
-            </foreignObject>
+            <g
+              className={`replacement-station-card ${selectedStation?.gate === station.gate ? "active" : ""}`}
+              role="button"
+              tabIndex={0}
+              aria-label={`Open ${station.gate} band replacement station`}
+              onClick={() => openStation(station)}
+              onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") openStation(station); }}
+            >
+              <rect x={station.cardX} y={station.cardY} width="148" height="50" rx="3" />
+              <BatteryChargingGlyph x={station.cardX + 10} y={station.cardY + 15} />
+              <text x={station.cardX + 40} y={station.cardY + 21} className="replacement-station-card-title">{station.gate} Band Station</text>
+              <text x={station.cardX + 40} y={station.cardY + 36} className="replacement-station-card-detail">{station.readyBands} replacements ready</text>
+            </g>
           </g>;
         }) : null}
-        {selectedStation ? <foreignObject
-          x={selectedStation.gate === "G1" ? 14 : 686}
-          y={selectedStation.cardY - 118}
-          width="200"
-          height="108"
-          className="replacement-station-panel-object"
-        >
-          <section className="replacement-station-panel">
-            <header><span>Band Replacement Station</span><button type="button" onClick={() => setSelectedStation(null)} aria-label="Close replacement station">×</button></header>
-            <strong><i /> {selectedStation.gate} Operational</strong>
-            <div><span><b>{selectedStation.readyBands}</b> Ready bands</span><span><b>{selectedStation.chargingSlots}</b> Charging slots</span><span><b>{selectedStation.technicians}</b> Technicians</span></div>
-            <button type="button" className="replacement-queue-button" onClick={() => setReplacementQueuedFor(selectedStation.gate)}>{replacementQueuedFor === selectedStation.gate ? "Replacement desk notified" : "Queue band replacement"}</button>
-          </section>
-        </foreignObject> : null}
+        {selectedStation ? <g className="replacement-station-panel-svg" transform={`translate(${selectedStation.gate === "G1" ? 14 : 686} ${selectedStation.cardY - 118})`}>
+          <rect width="200" height="108" rx="3" className="replacement-panel-shell" />
+          <text x="9" y="16" className="replacement-panel-heading">Band Replacement Station</text>
+          <g className="replacement-panel-close" role="button" tabIndex={0} aria-label="Close replacement station" onClick={() => setSelectedStation(null)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") setSelectedStation(null); }}><rect x="175" y="4" width="19" height="17" rx="2" /><text x="184.5" y="16">×</text></g>
+          <line x1="0" y1="25" x2="200" y2="25" />
+          <circle cx="10" cy="39" r="3" className="replacement-panel-status" /><text x="18" y="42" className="replacement-panel-operational">{selectedStation.gate} Operational</text>
+          {[[selectedStation.readyBands,"Ready bands"],[selectedStation.chargingSlots,"Charging slots"],[selectedStation.technicians,"Technicians"]].map(([value,label], index) => <g key={String(label)} transform={`translate(${index * 66.66} 0)`}><text x="33.33" y="61" className="replacement-panel-value">{value}</text><text x="33.33" y="72" className="replacement-panel-label">{label}</text></g>)}
+          <g className="replacement-panel-queue" role="button" tabIndex={0} onClick={() => setReplacementQueuedFor(selectedStation.gate)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") setReplacementQueuedFor(selectedStation.gate); }}><rect x="7" y="79" width="186" height="22" rx="2" /><text x="100" y="94">{replacementQueuedFor === selectedStation.gate ? "Replacement desk notified" : "Queue band replacement"}</text></g>
+        </g> : null}
         {showCameras ? [
           { ...stagePoint(332, 286), text: "C1" }, { ...stagePoint(270, 318), text: "C2" },
           { ...stagePoint(270, 42), text: "C3" }, { ...stagePoint(332, 74), text: "C4" },
