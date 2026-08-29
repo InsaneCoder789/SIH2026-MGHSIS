@@ -10,8 +10,9 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSPro
 import { useDemoOperations } from "@/components/demo-operations-context";
 import { OperationsHeader } from "@/components/operations-header";
 import { getTwinMapBands, type TwinMapBand } from "@/lib/bands";
+import type { OperationalAlert, TimelineRecord } from "@/lib/operations-data";
 import {
-  levelFor, scenarioNotes,
+  levelFor, overallRisk, scenarioNotes,
   type DigitalTwinSnapshot, type RiskLevel, type Scenario, type Zone,
 } from "@/lib/mghsis-demo";
 import { useLiveDigitalTwin } from "@/lib/use-live-digital-twin";
@@ -57,35 +58,6 @@ const scenarioControls: Array<{ id: Scenario; label: string; icon: typeof Siren;
   { id: "gateway", label: "Gateway Failure", icon: LockKeyhole, tone: "warning" },
   { id: "redirect", label: "Redirect Crowd", icon: LocateFixed, tone: "teal" },
   { id: "normal", label: "Reset", icon: RotateCcw, tone: "neutral" },
-];
-
-const alertGroups: Array<{ title: string; count: number; tone: AlertTone; rows: Array<[string, string, string]> }> = [
-  { title: "Human Risk", count: 4, tone: "human", rows: [
-    ["20:33:41", "Medical Emergency - Gate G3", "High"],
-    ["20:33:02", "Unattended Child - Block F4", "High"],
-    ["20:32:18", "Heat Stress Report - Block K6", "Medium"],
-    ["20:31:47", "Person in Distress - Block B2", "Medium"],
-  ] },
-  { title: "Crowd Risk", count: 5, tone: "crowd", rows: [
-    ["20:34:05", "Congestion - Block H3", "Severe"],
-    ["20:33:28", "High Density - Block G5", "High"],
-    ["20:32:51", "Congestion - South Premium East", "High"],
-    ["20:32:10", "Bottleneck - Gate G7", "Medium"],
-    ["20:31:35", "High Density - Block M2", "Medium"],
-  ] },
-  { title: "Population Integrity", count: 3, tone: "integrity", rows: [
-    ["20:33:59", "Possible Ticket Forgery - Gate G5", "High"],
-    ["20:33:40", "Re-entry Attempt - Gate G2", "Medium"],
-    ["20:31:22", "Unregistered Access - Gate G8", "Medium"],
-  ] },
-];
-
-const timelineRows: Array<[string, string, "ALERT" | "ACTION" | "SYSTEM"]> = [
-  ["20:34:05", "Congestion detected - Block H3", "ALERT"],
-  ["20:33:41", "Medical emergency reported - Gate G3", "ALERT"],
-  ["20:33:28", "Field team dispatched - Gate G3", "ACTION"],
-  ["20:33:12", "Crowd flow normal - Block N", "SYSTEM"],
-  ["20:32:51", "Congestion detected - South Premium East", "ALERT"],
 ];
 
 const riskColors: Record<RiskLevel, string> = {
@@ -484,35 +456,49 @@ export function StadiumTwin({ zones, selectedZone, onSelect, zoom, bands, select
   </div>;
 }
 
-function AlertPanel() {
+function AlertPanel({ alerts }: { alerts: OperationalAlert[] }) {
   const [activeTab, setActiveTab] = useState<"all" | AlertTone>("all");
-  const visible = activeTab === "all" ? alertGroups : alertGroups.filter((group) => group.tone === activeTab);
+  const activeAlerts = alerts.filter((alert) => alert.status !== "RESOLVED");
+  const definitions: Array<{ title: string; tone: AlertTone; category: OperationalAlert["category"] }> = [
+    { title: "Human Risk", tone: "human", category: "HUMAN_RISK" },
+    { title: "Crowd Risk", tone: "crowd", category: "CROWD_RISK" },
+    { title: "Population Integrity", tone: "integrity", category: "POPULATION_INTEGRITY" },
+  ];
+  const groups = definitions.map((definition) => {
+    const rows = activeAlerts.filter((alert) => alert.category === definition.category);
+    return { ...definition, count: rows.length, rows };
+  });
+  const visible = activeTab === "all" ? groups : groups.filter((group) => group.tone === activeTab);
+  const countFor = (tone: AlertTone) => groups.find((group) => group.tone === tone)?.count ?? 0;
   return <section className="alerts-panel" id="alerts"><h2>Active Alerts</h2>
     <div className="alert-tabs">
-      <button className={activeTab === "all" ? "active" : ""} onClick={() => setActiveTab("all")}>All <b>12</b></button>
-      <button className={activeTab === "human" ? "active" : ""} onClick={() => setActiveTab("human")}>Human Risk <b className="red-badge">4</b></button>
-      <button className={activeTab === "crowd" ? "active" : ""} onClick={() => setActiveTab("crowd")}>Crowd Risk <b className="orange-badge">5</b></button>
-      <button className={activeTab === "integrity" ? "active" : ""} onClick={() => setActiveTab("integrity")}>Pop. Integrity <b className="yellow-badge">3</b></button>
+      <button className={activeTab === "all" ? "active" : ""} onClick={() => setActiveTab("all")}>All <b>{activeAlerts.length}</b></button>
+      <button className={activeTab === "human" ? "active" : ""} onClick={() => setActiveTab("human")}>Human Risk <b className="red-badge">{countFor("human")}</b></button>
+      <button className={activeTab === "crowd" ? "active" : ""} onClick={() => setActiveTab("crowd")}>Crowd Risk <b className="orange-badge">{countFor("crowd")}</b></button>
+      <button className={activeTab === "integrity" ? "active" : ""} onClick={() => setActiveTab("integrity")}>Pop. Integrity <b className="yellow-badge">{countFor("integrity")}</b></button>
     </div>
-    <div className="alert-groups">{visible.map((group) => <article key={group.title} className={`alert-group ${group.tone}`}><header><strong>{group.title}</strong><span>{group.count} Alerts</span></header><div>{group.rows.map(([time,message,severity]) => <p key={`${time}-${message}`}><time>{time}</time><span>{message}</span><b className={severity.toLowerCase()}>{severity}</b></p>)}</div></article>)}</div>
+    <div className="alert-groups">{visible.map((group) => <article key={group.title} className={`alert-group ${group.tone}`}><header><strong>{group.title}</strong><span>{group.count} Alerts</span></header><div>{group.rows.slice(0, 5).map((alert) => <p key={alert.id}><time>{alert.createdAt}</time><span>{alert.title} - Zone {alert.zone}</span><b className={alert.severity}>{alert.severity}</b></p>)}</div></article>)}</div>
     <Link href="/alerts" className="feed-button"><ListFilter size={18} /> View Alert Feed</Link>
   </section>;
 }
 
 function KeyMetrics({ zones, selectedZone }: { zones: Zone[]; selectedZone: Zone }) {
   const atRisk = zones.filter((zone) => Math.max(zone.crowdRisk, zone.integrityRisk) >= 60).length;
+  const averageOccupancy = Math.round(zones.reduce((sum, zone) => sum + zone.observed / zone.safeCapacity, 0) / zones.length * 100);
+  const peakOccupancy = Math.round(Math.max(...zones.map((zone) => zone.observed / zone.safeCapacity)) * 100);
+  const gatesAtRisk = new Set(zones.filter((zone) => overallRisk(zone) >= 55).flatMap((zone) => zone.gates)).size;
   const metrics = [
-    ["Average Density","0.68","per m²","High",Users], ["Peak Density","1.92","per m²","Severe",Activity],
-    ["Congestion Zones",String(Math.max(7, atRisk)),"","Active",null], ["Gates At Risk","2","","High",null],
+    ["Average Occupancy",String(averageOccupancy),"percent","Live",Users], ["Peak Occupancy",String(peakOccupancy),"percent",peakOccupancy >= 100 ? "Severe" : "High",Activity],
+    ["Congestion Zones",String(atRisk),"","Active",null], ["Gates At Risk",String(gatesAtRisk),"","High",null],
     ["Medical Cases",String(Math.max(1, selectedZone.humanAlerts)),"","Active",HeartPulse],
   ] as const;
   return <section className="metrics-panel" id="metrics"><h2>Key Metrics</h2><div className="metric-cards">{metrics.map(([label,value,unit,state,Icon]) => <article key={label}><span>{label}</span><div>{Icon ? <Icon size={25} /> : null}<strong>{value}</strong></div><small>{unit || "\u00a0"}</small><b className={state.toLowerCase()}>{state}</b></article>)}</div><footer><span>Data Source: Multi-sensor Fusion</span><span>System ID: MGHSIS-GT-CC-01</span><span>Operator: Command Operator 1</span><b>Connected</b></footer></section>;
 }
 
-function EventTimeline() {
+function EventTimeline({ timeline }: { timeline: TimelineRecord[] }) {
   const [tab, setTab] = useState<"ALL" | "ALERT" | "ACTION" | "SYSTEM">("ALL");
-  const visible = tab === "ALL" ? timelineRows : timelineRows.filter((row) => row[2] === tab);
-  return <section className="timeline-panel" id="timeline"><h2>Event Timeline</h2><div className="timeline-tabs">{(["ALL","ALERT","ACTION","SYSTEM"] as const).map((item) => <button key={item} className={tab === item ? "active" : ""} onClick={() => setTab(item)}>{item === "ALERT" ? <Siren size={11} /> : item === "ACTION" ? <Radio size={11} /> : null}{item}{item === "ALERT" || item === "ACTION" ? "S" : ""}</button>)}</div><div className="timeline-list">{visible.map(([time,message,type]) => <p key={`${time}-${message}`}><time>{time}</time><span>{message}</span><b className={type.toLowerCase()}>{type}</b></p>)}</div><Link href="/replay" className="timeline-full">View Full Timeline <span>›</span></Link></section>;
+  const visible = (tab === "ALL" ? timeline : timeline.filter((row) => row.type === tab)).slice(0, 5);
+  return <section className="timeline-panel" id="timeline"><h2>Event Timeline</h2><div className="timeline-tabs">{(["ALL","ALERT","ACTION","SYSTEM"] as const).map((item) => <button key={item} className={tab === item ? "active" : ""} onClick={() => setTab(item)}>{item === "ALERT" ? <Siren size={11} /> : item === "ACTION" ? <Radio size={11} /> : null}{item}{item === "ALERT" || item === "ACTION" ? "S" : ""}</button>)}</div><div className="timeline-list">{visible.map((record) => <p key={record.id}><time>{record.time}</time><span>{record.title}{record.zone ? ` - ${record.zone}` : ""}</span><b className={record.type.toLowerCase()}>{record.type}</b></p>)}</div><Link href="/replay" className="timeline-full">View Full Timeline <span>›</span></Link></section>;
 }
 
 function ScenarioPanel({ scenario, onScenario }: { scenario: Scenario; onScenario: (scenario: Scenario) => void }) {
@@ -520,7 +506,7 @@ function ScenarioPanel({ scenario, onScenario }: { scenario: Scenario; onScenari
 }
 
 export function CommandCenterDashboard() {
-  const { scenario, alerts, activateScenario } = useDemoOperations();
+  const { scenario, alerts, timeline, activateScenario } = useDemoOperations();
   const isBrowser = useSyncExternalStore(subscribeToBrowser, () => true, () => false);
   const mapBands = useMemo(() => isBrowser ? getTwinMapBands() : [], [isBrowser]);
   const [selectedZone, setSelectedZone] = useState("G");
@@ -534,6 +520,6 @@ export function CommandCenterDashboard() {
     <section className="twin-workspace" id="digital-twin"><StatusOverlay capacity={capacity} scenario={scenario} /><MapTools zoom={zoom} setZoom={setZoom} /><RiskLegend />
       <StadiumTwin zones={zones} selectedZone={selected.id} onSelect={(zone) => { setSelectedZone(zone); setSelectedBandId(null); }} zoom={zoom} bands={mapBands} selectedBand={selectedBandId} onSelectBand={(bandId) => { const band = mapBands.find((item) => item.id === bandId); setSelectedBandId(bandId); if (band) setSelectedZone(band.zone); }} showHeatmap showGates showCameras />
     </section>
-    <AlertPanel /><KeyMetrics zones={zones} selectedZone={selected} /><EventTimeline /><ScenarioPanel scenario={scenario} onScenario={activateScenario} />
+    <AlertPanel alerts={alerts} /><KeyMetrics zones={zones} selectedZone={selected} /><EventTimeline timeline={timeline} /><ScenarioPanel scenario={scenario} onScenario={activateScenario} />
   </div></main>;
 }

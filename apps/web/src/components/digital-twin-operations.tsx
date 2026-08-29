@@ -16,13 +16,31 @@ import { useLiveDigitalTwin } from "@/lib/use-live-digital-twin";
 type RailView = "BANDS" | "ZONES" | "VIRTUALISATION";
 type StatusFilter = "ALL" | BandStatus;
 const subscribeToBrowser = () => () => undefined;
+type SimulationRisk = { score: number; level: string };
+type SimulationZone = {
+  observation: { current_count: number; inflow_per_min: number; outflow_per_min: number; gateway_health: number };
+  prediction: { zone_id: string; score: number; level: string; trend: string; confidence: number; recommended_actions: string[] };
+  fusion: { expected_population: number; authenticated_population: number; observed_population: number; largest_variance: number; variance_percent: number; cctv_confidence: number; gateway_health: number; population_state: string };
+  risk_engines: { human: SimulationRisk; crowd: SimulationRisk; integrity: SimulationRisk; overall: SimulationRisk };
+  forecast: { horizon_minutes: number; projected_population: number; projected_utilization_percent: number; net_flow_per_min: number; direction: string };
+};
+type SimulationVerification = {
+  action: string;
+  zone_id: string;
+  result: "EFFECTIVE" | "PARTIALLY_EFFECTIVE" | "INEFFECTIVE" | "INCONCLUSIVE";
+  elapsed_simulated_seconds: number;
+  baseline: { risk: number; population: number; inflow_per_min: number; outflow_per_min: number };
+  current: { risk: number; population: number; inflow_per_min: number; outflow_per_min: number };
+  delta: { risk: number; population: number; inflow_per_min: number; outflow_per_min: number };
+};
 type TwinSimulationState = {
   scenario: string;
   running: boolean;
   tick: number;
   active_action: { action: string; zone_id: string } | null;
-  aggregate: { peak_score: number; average_score: number; high_or_above: number; critical_zones: number };
-  zones: Array<{ observation: { current_count: number; inflow_per_min: number; outflow_per_min: number; gateway_health: number }; prediction: { zone_id: string; score: number; level: string; trend: string } }>;
+  aggregate: { peak_score: number; average_score: number; high_or_above: number; critical_zones: number; expected_population: number; authenticated_population: number; observed_population: number; population_variance: number; overall_peak_score: number };
+  zones: SimulationZone[];
+  verification: SimulationVerification | null;
 };
 
 async function simulationCommand(body: Record<string, string>) {
@@ -32,7 +50,8 @@ async function simulationCommand(body: Record<string, string>) {
 }
 
 function DigitalTwinVirtualisation({ state, busy, error, onCommand }: { state: TwinSimulationState | null; busy: boolean; error: string; onCommand: (body: Record<string, string>) => void }) {
-  const highest = state?.zones.toSorted((a, b) => b.prediction.score - a.prediction.score).slice(0, 4) ?? [];
+  const highest = state?.zones.toSorted((a, b) => b.risk_engines.overall.score - a.risk_engines.overall.score).slice(0, 2) ?? [];
+  const focus = highest[0];
   const scenario = state?.scenario ?? "normal";
   const scenarios = [
     { id: "congestion", label: "Crowd surge" },
@@ -40,16 +59,24 @@ function DigitalTwinVirtualisation({ state, busy, error, onCommand }: { state: T
     { id: "breach", label: "Gate breach" },
     { id: "gateway", label: "Gateway outage" },
   ];
+  const response = scenario === "distress"
+    ? { action: "DISPATCH_MEDICAL", zone: "B", label: "Dispatch Medical" }
+    : scenario === "breach"
+      ? { action: "RESTRICT_INFLOW", zone: "H", label: "Secure Gate G8" }
+      : scenario === "gateway"
+        ? { action: "OPEN_ALTERNATE_ROUTE", zone: "Q", label: "Reroute Zone Q" }
+        : { action: "REDIRECT_TO_ZONE", zone: "G", label: "Redirect Zone G" };
   return <section className={`digital-twin-virtualisation scenario-${scenario}`}>
     <header><div><p className="eyebrow">Scenario Projection</p><h2>{scenarios.find((item) => item.id === scenario)?.label ?? "Ready to simulate"}</h2></div><span className={state?.running ? "running" : ""}>{busy ? "UPDATING" : state?.running ? "RUNNING" : "PAUSED"}</span></header>
     <div className="virtualisation-scenarios">
       {scenarios.map((item) => <button key={item.id} className={scenario === item.id ? "active" : ""} disabled={busy} onClick={() => onCommand({ command: "scenario", scenario: item.id })}>{item.label}</button>)}
     </div>
     <div className="virtualisation-process" aria-label="Virtualisation processing stages"><span className={state ? "complete" : "active"}>Observe</span><i /><span className={state ? "complete" : ""}>Predict</span><i /><span className={state ? "active" : ""}>Project</span><i /><span className={state?.active_action ? "complete" : ""}>Respond</span></div>
-    <div className="virtualisation-summary"><div><small>Virtual tick</small><strong>{state?.tick ?? "--"}</strong></div><div><small>Peak score</small><strong>{state ? state.aggregate.peak_score.toFixed(1) : "--"}</strong></div><div><small>High+</small><strong>{state?.aggregate.high_or_above ?? "--"}</strong></div><div><small>Critical</small><strong>{state?.aggregate.critical_zones ?? "--"}</strong></div></div>
-    <div className="virtualisation-zones">{highest.map((item) => <article key={item.prediction.zone_id}><div><b>{item.prediction.zone_id}</b><span>{item.prediction.level} / {item.prediction.trend}</span></div><i><em className={item.prediction.level.toLowerCase()} style={{ width: `${Math.min(100, item.prediction.score)}%` }} /></i><strong>{item.prediction.score.toFixed(0)}</strong></article>)}</div>
-    {error ? <p className="virtualisation-error">{error}</p> : <p className="virtualisation-movement"><Activity size={12} />{state?.running ? "Movement layer advances with every virtual tick" : "Run the clock to animate projected crowd flow"}</p>}
-    <footer><button disabled={busy || !state} onClick={() => onCommand({ command: state?.running ? "pause" : "start" })}>{state?.running ? <Pause size={13} /> : <Play size={13} />}{state?.running ? "Pause projection" : "Run projection"}</button><button disabled={busy || !state} onClick={() => onCommand({ command: "action", action: "REDIRECT_TO_ZONE", zone_id: "G" })}><LocateFixed size={13} />Redirect Zone G</button><button disabled={busy || !state} onClick={() => onCommand({ command: "reset" })}>Reset</button></footer>
+    <div className="virtualisation-summary"><div><small>Virtual tick</small><strong>{state?.tick ?? "--"}</strong></div><div><small>Overall peak</small><strong>{state ? state.aggregate.overall_peak_score.toFixed(1) : "--"}</strong></div><div><small>High+</small><strong>{state?.aggregate.high_or_above ?? "--"}</strong></div><div><small>Critical</small><strong>{state?.aggregate.critical_zones ?? "--"}</strong></div></div>
+    {focus ? <section className="virtualisation-fusion"><header><span>Sensor fusion / Zone {focus.prediction.zone_id}</span><strong className={focus.fusion.population_state.toLowerCase()}>{focus.fusion.population_state}</strong></header><div><span>Expected<strong>{focus.fusion.expected_population.toLocaleString()}</strong></span><span>Bands<strong>{focus.fusion.authenticated_population.toLocaleString()}</strong></span><span>CCTV observed<strong>{focus.fusion.observed_population.toLocaleString()}</strong></span></div><footer><span>Variance <b>{focus.fusion.largest_variance.toLocaleString()}</b></span><span>5 min forecast <b>{focus.forecast.projected_population.toLocaleString()}</b></span><span>{focus.forecast.direction.replaceAll("_", " ")}</span></footer></section> : null}
+    <div className="virtualisation-zones">{highest.map((item) => <article key={item.prediction.zone_id}><div><b>{item.prediction.zone_id}</b><span>{item.risk_engines.overall.level} / {item.forecast.direction}</span></div><i><em className={item.risk_engines.overall.level.toLowerCase()} style={{ width: `${Math.min(100, item.risk_engines.overall.score)}%` }} /></i><strong>{item.risk_engines.overall.score.toFixed(0)}</strong></article>)}</div>
+    {state?.verification ? <section className={`virtualisation-verification ${state.verification.result.toLowerCase()}`}><header><span>Response verification / Zone {state.verification.zone_id}</span><strong>{state.verification.result.replaceAll("_", " ")}</strong></header><div><span>Risk<b>{state.verification.baseline.risk.toFixed(0)} → {state.verification.current.risk.toFixed(0)}</b></span><span>Population<b>{state.verification.delta.population > 0 ? "+" : ""}{state.verification.delta.population}</b></span><span>Net inflow<b>{state.verification.delta.inflow_per_min > 0 ? "+" : ""}{state.verification.delta.inflow_per_min.toFixed(0)}/m</b></span></div></section> : error ? <p className="virtualisation-error">{error}</p> : <p className="virtualisation-movement"><Activity size={12} />{state?.running ? "Movement layer advances with every virtual tick" : "Projection clock paused"}</p>}
+    <footer><button disabled={busy || !state} onClick={() => onCommand({ command: state?.running ? "pause" : "start" })}>{state?.running ? <Pause size={13} /> : <Play size={13} />}{state?.running ? "Pause projection" : "Run projection"}</button><button disabled={busy || !state} onClick={() => onCommand({ command: "action", action: response.action, zone_id: response.zone })}><LocateFixed size={13} />{response.label}</button><button disabled={busy || !state} onClick={() => onCommand({ command: "reset" })}>Reset</button></footer>
   </section>;
 }
 
@@ -79,6 +106,15 @@ function SegmentDistribution({ zone, bands }: { zone: Zone; bands: SafetyBand[] 
   });
   const max = Math.max(1, ...segments.map((segment) => segment.count));
   return <section className="segment-distribution"><header><span>Zone {zone.id} segment population</span><strong>{segments.reduce((sum, segment) => sum + segment.count, 0)} bands</strong></header><div>{segments.map((segment) => <article key={segment.id} className={segment.distressed ? "danger" : segment.elevated ? "elevated" : ""}><span>S{segment.id}</span><i><b style={{ height: `${Math.max(12, (segment.count / max) * 100)}%` }} /></i><strong>{segment.count}</strong><small>{segment.distressed ? `${segment.distressed} risk` : "stable"}</small></article>)}</div></section>;
+}
+
+function SelectedZonePanel({ zone }: { zone: Zone }) {
+  const engines = [
+    ["Human", Math.min(100, zone.humanAlerts * 25)],
+    ["Crowd", zone.crowdRisk],
+    ["Integrity", zone.integrityRisk],
+  ] as const;
+  return <section className="twin-selected-zone intelligence"><header><div><span>Selected Zone</span><strong>{zone.label}</strong></div><b>{overallRisk(zone)}<small>overall</small></b></header><div className="zone-population-triad"><span>Expected<strong>{zone.expected.toLocaleString()}</strong></span><span>Authenticated<strong>{zone.authenticated.toLocaleString()}</strong></span><span>Observed<strong>{zone.observed.toLocaleString()}</strong></span></div><div className="zone-engine-bars">{engines.map(([label, value]) => <span key={label}><small>{label}</small><i><b className={levelFor(value)} style={{ width: `${value}%` }} /></i><strong>{Math.round(value)}</strong></span>)}</div><footer><span>Flow {zone.inflow.toFixed(1)}/m in · {zone.outflow.toFixed(1)}/m out</span><span>CCTV {Math.round(zone.cctvConfidence * 100)}% · Gateway {Math.round(zone.gatewayHealth * 100)}%</span></footer></section>;
 }
 
 function ZoneRail({ zones, bands, totalBands, selectedZone, onSelect }: { zones: Zone[]; bands: SafetyBand[]; totalBands: number; selectedZone: string; onSelect: (zone: string) => void }) {
@@ -131,7 +167,7 @@ export function DigitalTwinOperations() {
   }, [railView]);
   const virtualZones = zones.map((item) => {
     const live = simulation?.zones.find((zoneItem) => zoneItem.prediction.zone_id === item.id);
-    return live ? { ...item, crowdRisk: live.prediction.score, observed: live.observation.current_count, inflow: live.observation.inflow_per_min, outflow: live.observation.outflow_per_min, gatewayHealth: live.observation.gateway_health } : item;
+    return live ? { ...item, expected: live.fusion.expected_population, authenticated: live.fusion.authenticated_population, observed: live.fusion.observed_population, crowdRisk: live.risk_engines.crowd.score, integrityRisk: live.risk_engines.integrity.score, humanAlerts: live.risk_engines.human.score >= 55 ? Math.max(1, item.humanAlerts) : 0, inflow: live.observation.inflow_per_min, outflow: live.observation.outflow_per_min, cctvConfidence: live.fusion.cctv_confidence, gatewayHealth: live.observation.gateway_health } : item;
   });
   const isVirtualisation = railView === "VIRTUALISATION";
   const displayZones = isVirtualisation ? virtualZones : zones;
@@ -198,7 +234,7 @@ export function DigitalTwinOperations() {
 
       <aside className="twin-live-rail">
         <header><div><p className="eyebrow">Venue Intelligence</p><h1>{isVirtualisation ? "Twin Virtualisation" : "Live Twin Data"}</h1></div>{isVirtualisation ? <Play size={18} /> : <Activity size={18} />}</header>
-        <div className="twin-rail-tabs"><button className={railView === "BANDS" ? "active" : ""} onClick={() => setRailView("BANDS")}><Watch size={14} />Bands</button><button className={railView === "ZONES" ? "active" : ""} onClick={() => setRailView("ZONES")}><UsersRound size={14} />Zones</button><button className={isVirtualisation ? "active" : ""} onClick={() => setRailView("VIRTUALISATION")}><Play size={14} />Virtualisation</button></div>
+        <div className="twin-rail-tabs"><button className={railView === "BANDS" ? "active" : ""} onClick={() => setRailView("BANDS")}><Watch size={14} />Bands</button><button className={railView === "ZONES" ? "active" : ""} onClick={() => { setRailView("ZONES"); setSelectedBandId(null); }}><UsersRound size={14} />Zones</button><button className={isVirtualisation ? "active" : ""} onClick={() => setRailView("VIRTUALISATION")}><Play size={14} />Virtualisation</button></div>
         {!isVirtualisation ? <><div className="twin-rail-filters">
           <label><Search size={14} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search band ID" aria-label="Search live bands" /></label>
           <select value={zoneFilter} onChange={(event) => { setZoneFilter(event.target.value); if (event.target.value !== "ALL") setSelectedZone(event.target.value); }} aria-label="Filter live bands by zone"><option value="ALL">All zones</option>{BAND_ZONES.map((item) => <option key={item} value={item}>Zone {item}</option>)}</select>
@@ -206,7 +242,7 @@ export function DigitalTwinOperations() {
           <button title="Clear twin filters" onClick={clearFilters}><FilterX size={15} /></button>
         </div>
 
-        {selectedBand ? <SelectedBandPanel band={selectedBand} /> : <section className="twin-selected-zone"><span>Selected Zone</span><strong>{zone.label}</strong><small>{zone.observed.toLocaleString()} observed / risk {overallRisk(zone)}</small></section>}
+        {selectedBand ? <SelectedBandPanel band={selectedBand} /> : <SelectedZonePanel zone={zone} />}
         <SegmentDistribution zone={zone} bands={TWIN_RENDER_BANDS} />
 
         {railView === "BANDS" ? <div className="twin-band-list"><header><span>Highest risk bands</span><strong>Live priority records</strong></header>{railBands.map((band) => <button key={band.id} className={`${band.status.toLowerCase()} ${selectedBandId === band.id ? "selected" : ""}`} onClick={() => { setSelectedBandId(band.id); setSelectedZone(band.zone); }}><i /><div><strong>{band.code}</strong><span>Zone {band.zone} / S{band.segment} / {band.connectivity}</span></div><div><strong>{band.hr}</strong><span>BPM</span></div><div><strong>{band.spo2}%</strong><span>SpO2</span></div><b>{band.riskScore}<small>{band.status}</small></b></button>)}</div> : <ZoneRail zones={zones} bands={TWIN_RENDER_BANDS} totalBands={DEMO_BAND_COUNT} selectedZone={selectedZone} onSelect={(id) => { setSelectedZone(id); setZoneFilter(id); setSelectedBandId(null); }} />}</> : <DigitalTwinVirtualisation state={simulation} busy={simulationBusy} error={simulationError} onCommand={runSimulationCommand} />}

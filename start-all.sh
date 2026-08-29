@@ -7,6 +7,7 @@ cd "$ROOT_DIR"
 
 api_pid=""
 web_pid=""
+simulator_pids=()
 infra_started=false
 cleaned_up=false
 
@@ -33,8 +34,14 @@ cleanup() {
   log "Stopping the web application and API..."
   [[ -n "$web_pid" ]] && kill "$web_pid" 2>/dev/null || true
   [[ -n "$api_pid" ]] && kill "$api_pid" 2>/dev/null || true
+  for pid in "${simulator_pids[@]-}"; do
+    kill "$pid" 2>/dev/null || true
+  done
   [[ -n "$web_pid" ]] && wait "$web_pid" 2>/dev/null || true
   [[ -n "$api_pid" ]] && wait "$api_pid" 2>/dev/null || true
+  for pid in "${simulator_pids[@]-}"; do
+    wait "$pid" 2>/dev/null || true
+  done
 
   if [[ "$infra_started" == true ]]; then
     log "Stopping PostgreSQL and Redis..."
@@ -53,6 +60,8 @@ docker info >/dev/null 2>&1 || fail "Docker Desktop is not running. Open it and 
 
 [[ -d node_modules ]] || fail "Frontend dependencies are missing. Run: npm install"
 [[ -x .venv/bin/uvicorn ]] || fail "API dependencies are missing. Create .venv and install apps/api/requirements.txt."
+PYTHON_EXECUTABLE="$(sed -n '1s/^#!//p' .venv/bin/uvicorn)"
+[[ -x "$PYTHON_EXECUTABLE" ]] || fail "The Python runtime used by uvicorn is unavailable. Recreate .venv."
 
 if port_is_busy 3000; then
   fail "Port 3000 is already in use. Stop the existing frontend process first."
@@ -107,6 +116,25 @@ PYTHONPATH="$ROOT_DIR/apps/api" "$ROOT_DIR/.venv/bin/uvicorn" app.main:app \
   --port 8000 &
 api_pid=$!
 
+log "Waiting for the API readiness endpoint..."
+for attempt in $(seq 1 40); do
+  if "$PYTHON_EXECUTABLE" -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/system/readiness', timeout=1)" >/dev/null 2>&1; then
+    break
+  fi
+  if [[ "$attempt" -eq 40 ]]; then
+    fail "The FastAPI service did not become ready within 40 seconds."
+  fi
+  sleep 1
+done
+
+log "Starting live band, CCTV and gate telemetry streams..."
+"$PYTHON_EXECUTABLE" services/band-simulator/main.py --mode large --interval 2 &
+simulator_pids+=("$!")
+"$PYTHON_EXECUTABLE" services/cctv-analytics/main.py --interval 2.5 &
+simulator_pids+=("$!")
+"$PYTHON_EXECUTABLE" services/gate-simulator/main.py --interval 3 &
+simulator_pids+=("$!")
+
 log "Starting the Next.js portal on http://localhost:3000..."
 npm run dev &
 web_pid=$!
@@ -115,6 +143,7 @@ printf '\n[MGHSIS] All services are starting.\n'
 printf '[MGHSIS] Portal:      http://localhost:3000\n'
 printf '[MGHSIS] Digital Twin: http://localhost:3000/digital-twin\n'
 printf '[MGHSIS] API Docs:     http://localhost:8000/docs\n'
+printf '[MGHSIS] Telemetry:    10,000 bands + CCTV + gate streams\n'
 printf '[MGHSIS] Press Ctrl+C to stop everything.\n\n'
 
 while true; do
@@ -133,6 +162,16 @@ while true; do
     set -e
     fail "The frontend stopped unexpectedly with exit code $exit_code."
   fi
+
+  for pid in "${simulator_pids[@]-}"; do
+    if ! kill -0 "$pid" 2>/dev/null; then
+      set +e
+      wait "$pid"
+      exit_code=$?
+      set -e
+      fail "A telemetry simulator stopped unexpectedly with exit code $exit_code."
+    fi
+  done
 
   sleep 2
 done
