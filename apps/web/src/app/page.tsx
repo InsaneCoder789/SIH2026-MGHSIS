@@ -37,8 +37,8 @@ export default function HomePage() {
       <section className="portal-event-band">
         <div><span>Active Event</span><strong>GT vs DC - IPL 2025</strong><small><i /> Live · Narendra Modi Stadium</small></div>
         <div><span>Mode</span><strong>Cricket Stadium</strong><small>Fixed sector deployment</small></div>
-        <div><span>Authenticated</span><strong>38,247</strong><small><Users size={13} /> Event population</small></div>
-        <div><span>Observed Estimate</span><strong>41,892</strong><small>+3,645 variance</small></div>
+        <div><span>Authenticated</span><strong>{summary.active.toLocaleString()}</strong><small><Users size={13} /> Issued bands online</small></div>
+        <div><span>Observed Estimate</span><strong>{summary.active.toLocaleString()}</strong><small>Sensor sources aligned</small></div>
         <div><span>Active Alerts</span><strong className="danger">12</strong><small><AlertTriangle size={13} /> Requires review</small></div>
         <div><span>System Health</span><strong className="healthy">Good</strong><small><ShieldCheck size={13} /> All core services</small></div>
       </section>
