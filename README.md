@@ -33,16 +33,16 @@ MGHSIS is decision-support software. It does not perform medical diagnosis, faci
 
 ## What Is Implemented
 
-- A polished Next.js operations portal and command centre.
-- A cricket-stadium Digital Twin with blocks, segments, premium areas, gates, CCTV markers, heatmaps, and band stations.
+- A polished Next.js operations portal and command centre featuring a unified two-level operations shell, a graphite interface system, and a keyboard-accessible command palette with live module search.
+- A cricket-stadium Digital Twin with blocks, segments, premium areas, gates, CCTV markers, band stations, and extended heatmap coverage (south service bays, concourse sections, President Gallery, and suite floors).
 - A deterministic 50,000-band event registry with searchable individual telemetry records.
-- Selectable wearable markers across the stadium, President Gallery, Presidential Suites, and Premium Suites.
+- 10,000 interactive on-map points allowing exact band selection across the stadium, President Gallery, and hospitality suite floors.
 - Human Risk, Crowd Risk, and Population Integrity Risk workflows.
-- A persisted crowd-risk ML model with explainable probability output and recommended actions.
-- Live scenario virtualisation with congestion, distress, breach, gateway-failure, and crowd-redirect states.
-- FastAPI hardware ingestion with timestamp and sequence validation.
-- Redis shared state, replay protection, pub/sub, and WebSocket fan-out.
-- PostgreSQL hardware telemetry and event history.
+- Real-time three-engine zone fusion, 5-minute forecasts, and population reconciliation.
+- A persisted crowd-risk ML model with explainable probability output, recommended actions, and vectorized batch inference.
+- Live scenario virtualisation with stable scenario controls across congestion, distress, breach, gateway-failure, and crowd-redirect projections.
+- Before-and-after intervention verification using preserved simulator metrics to measure response effectiveness.
+- FastAPI hardware ingestion with timestamp and sequence validation, backed by PostgreSQL history and Redis pub/sub streams.
 - Executable band, gate, CCTV, and scenario simulator services.
 - Alert lifecycle, intervention authorization, replay, analytics, and system-health views.
 
@@ -118,14 +118,15 @@ Read [docs/ML.md](docs/ML.md) for the model contract and limitations.
 
 The dedicated `/digital-twin` workspace provides:
 
-- Live and Virtualisation modes.
-- Dense Canvas rendering for wearable telemetry.
-- Direct band selection with on-map identity and risk feedback.
-- Block, segment, premium-area, gate, CCTV, and heatmap layers.
-- G1 and G8 replacement/charging station beacons.
+- Live and Virtualisation modes with stable scenario controls across congestion and distress projections.
+- Dense Canvas rendering with 10,000 interactive map points and larger touch/pen hit targets.
+- Direct band selection on the map (including President Gallery and suite floors) with ID, zone, and risk details.
+- Comprehensive heatmap coverage across seating sectors, concourses, south service bays, President Gallery, and hospitality suites.
+- G1 and G8 replacement/charging station beacons positioned in clear exterior margins with directional leader arrows.
+- Live three-engine zone fusion, 5-minute forecasts, and population reconciliation.
 - Search and filtering by band ID, zone, connectivity, status, and distress.
 - Live zone distributions and highest-risk band records.
-- Projected crowd movement and intervention re-scoring.
+- Projected crowd movement, intervention re-scoring, and evidence-backed verification.
 
 The event model contains 50,000 registered bands, with 49,483 represented as connected and authenticated in the current demonstration state.
 
